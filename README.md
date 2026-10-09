@@ -163,7 +163,7 @@ git clone https://github.com/thejohnd0e/PicaLum-QwenImage && cd PicaLum-QwenImag
 </td></tr>
 <tr><td><b>No terminal</b></td><td>
 
-Download the [source zip](https://github.com/thejohnd0e/PicaLum-QwenImage/archive/refs/heads/main.zip), extract it and **double-click `build.cmd`**.
+Download the [source zip](https://github.com/thejohnd0e/PicaLum-QwenImage/archive/refs/heads/master.zip), extract it and **double-click `build.cmd`**.
 
 </td></tr>
 </table>

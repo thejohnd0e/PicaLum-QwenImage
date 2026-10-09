@@ -310,6 +310,11 @@ async fn gpu_stats() -> Option<gpu::Gpu> {
         .flatten()
 }
 
+#[tauri::command]
+fn app_version() -> &'static str {
+    env!("CARGO_PKG_VERSION")
+}
+
 /// Decodes an image as it should be seen: phone photos are often stored sideways with an
 /// EXIF orientation tag, which image::open ignores.
 fn open_upright(path: &str) -> Result<image::DynamicImage, String> {
@@ -493,6 +498,7 @@ pub fn run() {
             cancel,
             surprise_idea,
             gpu_stats,
+            app_version,
             thumbnail,
             rotate_image,
             pick_images,
@@ -515,6 +521,11 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn application_version_matches_cargo_package_version() {
+        assert_eq!(app_version(), env!("CARGO_PKG_VERSION"));
+    }
 
     #[test]
     fn output_folder_validation_rejects_empty_and_relative_paths() {

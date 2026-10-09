@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.7 — 2026-10-09
+
+- Edit mode: manage reusable prompt presets saved locally in the runtime directory; the tool panel is now on the left.
+- Create prompt field: remove the visible Description label while preserving its accessible name.
+- Desktop app and NSIS installer: use the supplied app icon.
+
 ## 0.1.3 — 2026-10-09
 
 - Output settings: choose the generated-image folder and whether to create JSON sidecars; prompt and model metadata are always embedded in PNGs.

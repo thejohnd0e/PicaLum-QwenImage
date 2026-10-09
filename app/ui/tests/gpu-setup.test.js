@@ -41,7 +41,20 @@ test("unknown capability is an install blocker while a ready setup is allowed", 
 test('Task 6 verification UX has all localized state strings and command hooks', () => { const fs=require('node:fs'); const path=require('node:path'); const ui=fs.readFileSync(path.join(__dirname,'..','app.js'),'utf8'); const i18n=fs.readFileSync(path.join(__dirname,'..','i18n.js'),'utf8'); for (const k of ['verificationRunning','verificationSuccess','verificationFailed','verificationSkipped','verificationContinue','verificationRetry','verificationCancel']) assert.equal((i18n.match(new RegExp(k+':','g'))||[]).length,3); for (const cmd of ['gpu_verification_start','gpu_verification_cancel','gpu_verification_status']) assert.match(ui+fs.readFileSync(path.join(__dirname,"..","verification-controller.js"),"utf8"),new RegExp(cmd)); });
 
 test("production loads and instantiates the verification controller", () => { const fs=require("node:fs"); const path=require("node:path"); const html=fs.readFileSync(path.join(__dirname,"..","index.html"),"utf8"); const ui=fs.readFileSync(path.join(__dirname,"..","app.js"),"utf8"); const controller=fs.readFileSync(path.join(__dirname,"..","verification-controller.js"),"utf8"); assert.ok(html.includes("<script src=\"verification-controller.js\"></script>")); assert.ok(html.indexOf("verification-controller.js") >= 0 && html.indexOf("app.js") > html.indexOf("verification-controller.js")); assert.ok(ui.includes("QilVerification({ invoke, listen")); assert.equal((ui.match(/invoke\("gpu_verification_start"\)/g)||[]).length,0); });
-test("all ready setup paths use the verification gate and generation has a runtime guard", () => { const fs=require("node:fs"); const path=require("node:path"); const ui=fs.readFileSync(path.join(__dirname,"..","app.js"),"utf8"); assert.ok((ui.match(/enterReadyFlow\(\)/g)||[]).length >= 3); assert.ok(ui.includes("function enterReadyFlow()")); assert.ok(ui.includes("if ($(\"genBtn\").disabled || state.verification.state === \"running\") return;")); assert.ok(ui.includes("beginVerificationPhase();")); });
+test("opening the app never auto-starts verification; Settings offers a manual check", () => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const ui = fs.readFileSync(path.join(__dirname, "..", "app.js"), "utf8");
+  const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+  const i18n = fs.readFileSync(path.join(__dirname, "..", "i18n.js"), "utf8");
+  assert.ok(ui.includes("function enterReadyFlow() { enterApp(); }"));
+  assert.ok(!ui.includes("beginVerificationPhase") && !ui.includes("refreshVerification"));
+  assert.ok(/settingsVerificationRetry"\)\.addEventListener\("click", async \(\) => \{ closeSettings\(\); await startVerification\(true\);/.test(ui));
+  assert.ok(html.includes('id="settingsVerificationRetry" data-i18n="verificationRun"'));
+  for (const key of ["verificationRun", "verificationRunHint"]) assert.equal((i18n.match(new RegExp(key + ":", "g")) || []).length, 3, key);
+  assert.ok(ui.includes('$("genBtn").disabled || state.verification.state === "running"'));
+});
+
 test("a failed or interrupted verification is retried on the next start, not remembered as started", async () => {
   const create = require("../verification-controller.js");
   const storage = new Map();
@@ -68,4 +81,30 @@ test("setup status exposes the engine fingerprint used by the verification key",
   const path = require("node:path");
   const ui = fs.readFileSync(path.join(__dirname, "..", "app.js"), "utf8");
   assert.ok(ui.includes("s?.status?.engineFingerprint"));
+});
+
+test("header stacks the product name over the version and GitHub link", () => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+  const ui = fs.readFileSync(path.join(__dirname, "..", "app.js"), "utf8");
+  for (const id of ["profileTag", "brand-model", "qwen-image-2.1"]) {
+    assert.ok(!html.includes(id), `html still has ${id}`);
+    assert.ok(!ui.includes(id), `app.js still references ${id}`);
+  }
+  const copy = html.slice(html.indexOf('class="brand-copy"'), html.indexOf("</header>"));
+  const title = copy.indexOf("<strong>PicaLum QwenImage</strong>");
+  const meta = copy.indexOf('class="brand-meta"');
+  assert.ok(title >= 0 && meta > title, "title comes first, meta below");
+  assert.ok(copy.indexOf('id="appVersion"') > meta && copy.indexOf('id="githubLink"') > copy.indexOf('id="appVersion"'));
+  assert.ok(ui.includes('$("appVersion").textContent'));
+});
+
+test("header: larger product name, larger mode tabs pushed away from the brand", () => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const css = fs.readFileSync(path.join(__dirname, "..", "styles.css"), "utf8");
+  assert.match(css, /\.brand strong \{ font-size: 16px;/);
+  assert.match(css, /\.mode-nav button \{[^}]*font: 500 15px/);
+  assert.match(css, /\.mode-nav \{[^}]*margin-left: auto;/);
 });

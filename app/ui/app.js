@@ -197,12 +197,11 @@
   function escapeHtml(s) { return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]); }
 
   function verificationKey() { const s=state.setup; return [s?.status?.selectedUuid||s?.config?.gpuSelection?.selectedUuid||"",s?.config?.profile||"",s?.status?.engineFingerprint||""].join("|"); }
-  function renderVerification() { const v=state.verification; const c=$("verificationCard"); if(!c)return; c.hidden=!( ["running","failed","success","skipped"].includes(v.state)); $("verificationTitle").textContent=t(v.state==="failed"?"verificationFailed":v.state==="success"?"verificationSuccess":v.state==="skipped"?"verificationSkipped":"verificationRunning"); $("verificationDetail").textContent=v.state==="failed"?t("verificationFailureHint")+(v.error?"\n"+String(v.error).replace(/^Error:\s*/,"").slice(0,400):""):(v.state==="success"||v.state==="skipped")?"":t("verificationProgress",v.progress); $("verificationFill").style.width=v.progress+"%"; $("verificationRetry").textContent=t("verificationRetry"); $("verificationCancel").textContent=t("verificationCancel"); $("verificationContinue").textContent=t("verificationContinue"); $("verificationRetry").hidden=v.state!=="failed"; $("verificationCancel").hidden=v.state!=="running"; $("verificationContinue").hidden=!(v.state==="success"||v.state==="skipped"); }
+  function renderVerification() { const v=state.verification; const c=$("verificationCard"); if(!c)return; c.hidden=!( ["running","failed","success","skipped"].includes(v.state)); $("verificationTitle").textContent=t(v.state==="failed"?"verificationFailed":v.state==="success"?"verificationSuccess":v.state==="skipped"?"verificationSkipped":"verificationRunning"); $("verificationDetail").textContent=v.state==="failed"?t("verificationFailureHint")+(v.error?"\n"+String(v.error).replace(/^Error:\s*/,"").slice(0,400):""):(v.state==="success"||v.state==="skipped")?"":t("verificationProgress",v.progress); $("verificationFill").style.width=v.progress+"%"; $("verificationRetry").textContent=t("verificationRetry"); $("verificationCancel").textContent=t("verificationCancel"); $("verificationContinue").textContent=t("verificationContinue"); $("verificationRetry").hidden=v.state!=="failed"; $("verificationCancel").hidden=v.state!=="running"; $("verificationContinue").hidden=v.state==="running"; }
   async function startVerification(force=false) { await verification.start(force); }
-  async function enterReadyFlow() { const record=await invoke("gpu_verification_status").catch(()=>null); const key=verificationKey(); const recordKey=record ? [record.gpuUuid,record.profile,record.engineFingerprint].join("|") : ""; if (record && recordKey===key && ["passed","failed","skipped"].includes(record.status)) { enterApp(); return; } beginVerificationPhase(); }
-  function beginVerificationPhase() { $("setupView").hidden=true; $("mainView").hidden=false; $("modeNav").hidden=true; ["engineStat","engineBtn","folderBtn","settingsBtn"].forEach((id)=>$(id).hidden=true); renderVerification(); refreshVerification(); }
+  // Verification is manual (Settings). Opening the app never starts a test generation.
+  function enterReadyFlow() { enterApp(); }
   function continueVerification() { verification.continue(); enterApp(); }
-  async function refreshVerification() { const existing=await invoke("gpu_verification_status").catch(()=>null); if(existing && ["passed","skipped","failed"].includes(existing.status)) verification.restore(existing); const key=verificationKey(); if(!key || localGet("verification.started","")===key) return; await verification.start(); }
   $("verificationContinue").addEventListener("click",continueVerification); $("verificationRetry").addEventListener("click",()=>{startVerification(true);}); $("verificationCancel").addEventListener("click",()=>{verification.cancel();});
 
   // ═════════ Main app ═════════
@@ -213,8 +212,6 @@
     $("modeNav").hidden = false;
     ["engineStat", "engineBtn", "folderBtn"].forEach((id) => { $(id).hidden = false; });
     $("settingsBtn").hidden = false;
-    const p = state.setup?.config.profile === "compact" ? "w4a8" : "int8";
-    $("profileTag").textContent = p;
     invoke("output_dir").then((d) => { $("outDirTxt").textContent = d; }).catch(() => {});
     loadHistory();
     promptPresets.load();
@@ -674,7 +671,7 @@
     $("settingsError").textContent = text;
     $("settingsError").hidden = false;
   }
-  $("settingsVerificationRetry").addEventListener("click", async () => { closeSettings(); localSet("verification.started",""); await startVerification(); });
+  $("settingsVerificationRetry").addEventListener("click", async () => { closeSettings(); await startVerification(true); });
   $("settingsBtn").addEventListener("click", openSettings);
   $("settingsCancel").addEventListener("click", closeSettings);
   $("settingsBackdrop").addEventListener("click", (event) => { if (event.target === $("settingsBackdrop")) closeSettings(); });

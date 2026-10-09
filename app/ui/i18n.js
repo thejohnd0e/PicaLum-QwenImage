@@ -2,7 +2,7 @@
 (() => {
   const S = {
     en: {
-      verificationTitle: "Checking your GPU", verificationRunning: "Verifying the installed profile…", verificationSuccess: "GPU profile verified", verificationFailed: "GPU verification failed", verificationSkipped: "GPU verification skipped", verificationContinue: "Continue", verificationRetry: "Retry verification", verificationCancel: "Cancel verification", verificationProgress: (p) => `Step ${p}%`, verificationFailureHint: "The app remains usable. You can retry from here or Settings.",
+      verificationTitle: "Checking your GPU", verificationRun: "Check GPU", verificationRunHint: "Generates one test image to check the installed profile (about a minute).", verificationRunning: "Verifying the installed profile…", verificationSuccess: "GPU profile verified", verificationFailed: "GPU verification failed", verificationSkipped: "GPU verification skipped", verificationContinue: "Continue", verificationRetry: "Retry verification", verificationCancel: "Cancel verification", verificationProgress: (p) => `Step ${p}%`, verificationFailureHint: "The app remains usable. You can retry from here or Settings.",
       openFolder: "Open folder",
       settingsTitle: "Output settings", outputFolder: "Output folder", jsonSidecars: "Create JSON metadata files",
       embeddedPngNote: "The prompt and model are always embedded in each PNG for compatibility with metadata readers.",
@@ -63,7 +63,7 @@ setupTitle: "Set up PicaLum QwenImage",
       eventsFail: "Could not register events (check capabilities/default.json): ",
     },
     ru: {
-      verificationTitle: "Проверка GPU", verificationRunning: "Проверяем установленный профиль…", verificationSuccess: "Профиль GPU подтверждён", verificationFailed: "Не удалось проверить GPU", verificationSkipped: "Проверка GPU пропущена", verificationContinue: "Продолжить", verificationRetry: "Повторить проверку", verificationCancel: "Отменить проверку", verificationProgress: (p) => `Шаг ${p}%`, verificationFailureHint: "Приложение доступно. Повторить можно здесь или в настройках.",
+      verificationTitle: "Проверка GPU", verificationRun: "Проверить GPU", verificationRunHint: "Создаёт одно тестовое изображение для проверки профиля (около минуты).", verificationRunning: "Проверяем установленный профиль…", verificationSuccess: "Профиль GPU подтверждён", verificationFailed: "Не удалось проверить GPU", verificationSkipped: "Проверка GPU пропущена", verificationContinue: "Продолжить", verificationRetry: "Повторить проверку", verificationCancel: "Отменить проверку", verificationProgress: (p) => `Шаг ${p}%`, verificationFailureHint: "Приложение доступно. Повторить можно здесь или в настройках.",
       openFolder: "Открыть папку",
       settingsTitle: "Настройки сохранения", outputFolder: "Папка сохранения", jsonSidecars: "Создавать JSON-файлы с метаданными",
       embeddedPngNote: "Запрос и модель всегда встраиваются в PNG для совместимости с программами чтения метаданных.",
@@ -124,7 +124,7 @@ setupTitle: "Настройка PicaLum QwenImage",
       eventsFail: "Не удалось зарегистрировать события (проверьте capabilities/default.json): ",
     },
     es: {
-      verificationTitle: "Comprobando tu GPU", verificationRunning: "Verificando el perfil instalado…", verificationSuccess: "Perfil de GPU verificado", verificationFailed: "Falló la verificación de GPU", verificationSkipped: "Verificación de GPU omitida", verificationContinue: "Continuar", verificationRetry: "Reintentar verificación", verificationCancel: "Cancelar verificación", verificationProgress: (p) => `Paso ${p}%`, verificationFailureHint: "La app sigue disponible. Puedes reintentar aquí o desde Ajustes.",
+      verificationTitle: "Comprobando tu GPU", verificationRun: "Comprobar GPU", verificationRunHint: "Genera una imagen de prueba para comprobar el perfil (cerca de un minuto).", verificationRunning: "Verificando el perfil instalado…", verificationSuccess: "Perfil de GPU verificado", verificationFailed: "Falló la verificación de GPU", verificationSkipped: "Verificación de GPU omitida", verificationContinue: "Continuar", verificationRetry: "Reintentar verificación", verificationCancel: "Cancelar verificación", verificationProgress: (p) => `Paso ${p}%`, verificationFailureHint: "La app sigue disponible. Puedes reintentar aquí o desde Ajustes.",
       openFolder: "Abrir carpeta",
       settingsTitle: "Ajustes de guardado", outputFolder: "Carpeta de salida", jsonSidecars: "Crear archivos JSON de metadatos",
       embeddedPngNote: "El prompt y el modelo siempre se incluyen en cada PNG para compatibilidad con lectores de metadatos.",

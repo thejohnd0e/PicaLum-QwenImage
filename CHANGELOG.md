@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.1.15 — 2026-10-10
+
+- Desktop header: larger product name; the Create / Edit / Surprise tabs are larger and moved away from the brand, centered between it and the status controls.
+
+## 0.1.14 — 2026-10-10
+
+- Desktop header: the product name on top, with the version and the GitHub link on one line below it; the model name and profile tag are removed.
+
+## 0.1.13 — 2026-10-10
+
+- Desktop header: show only the product name and the GitHub link; the model name, profile tag and version are no longer displayed.
+
+## 0.1.12 — 2026-10-10
+
+- Desktop header: remove the model name from the brand line; it now shows the profile tag and version.
+
+## 0.1.11 — 2026-10-10
+
+- Desktop: the automatic Draft verification after install or update is removed; the app opens straight away. The test generation is now an on-demand "Check GPU" button in Settings. The architecture check before downloading weights is unchanged.
+
 ## 0.1.10 — 2026-10-09
 
 - GPU verification now starts after install or update: the setup status exposes the engine fingerprint (the UI previously never matched a saved result), and a failed or interrupted run is no longer remembered as started, so it is retried on the next launch.

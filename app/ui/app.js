@@ -33,12 +33,19 @@
     sessionOutputs: new Set(),
     generationRun: 0,
     stopRequested: false,
+    batch: null,
+    compareMode: "result",
+    compareItemPath: null,
+    compareZoom: "fit",
+    comparePan: { x: 0.5, y: 0.5 },
+    wipePosition: 50,
     lastIdea: null,
     stepTimes: [],
     setup: null, // SetupInfo from Rust
     installing: false,
     stepState: {}, // id -> {state, detail, done, total, bps}
   };
+  const comparison = window.QilComparison.create({ state, getElement: $, fileSrc, translate: t });
 
   function localGet(k, d) { try { return localStorage.getItem("qil." + k) ?? d; } catch { return d; } }
   function localSet(k, v) { try { localStorage.setItem("qil." + k, v); } catch { /* no storage */ } }
@@ -176,6 +183,7 @@
   function enterApp() {
     $("setupView").hidden = true;
     $("mainView").hidden = false;
+    $("modeNav").hidden = false;
     ["engineStat", "engineBtn", "folderBtn"].forEach((id) => { $(id).hidden = false; });
     $("settingsBtn").hidden = false;
     const p = state.setup?.config.profile === "compact" ? "w4a8" : "int8";
@@ -302,6 +310,7 @@
     const menu = $("genMenu");
     menu.hidden = !open;
     $("genMenuBtn").setAttribute("aria-expanded", String(open));
+    $("batchSeedWarning").hidden = !open || !$("seedLock").checked || !$("seed").value;
   }
   function updateGenButton() {
     const btn = $("genBtn");
@@ -316,10 +325,12 @@
     else if (state.mode === "photos") label = state.refs.length > 1 ? t("genWith", state.refs.length) : t("genEdit");
     btn.textContent = label;
     btn.disabled = !ok;
-    $("genMenuBtn").disabled = !ok;
-    $("genForeverBtn").disabled = !ok;
+    ["genMenuBtn", "gen4Btn", "gen8Btn", "genForeverBtn"].forEach((id) => { $(id).disabled = !ok; });
     if (!ok) setGenerateMenu(false);
+    else if (!$("genMenu").hidden) setGenerateMenu(true);
     $("cancelBtn").hidden = !state.busy;
+    $("batchRunning").hidden = !state.batch;
+    $("stopAfterCurrentBtn").hidden = !state.batch || state.batch.count === null || !state.batch.requestActive || state.batch.stopAfterCurrent;
     $("clearHistoryBtn").disabled = state.busy || state.history.length === 0;
     $("settingsBtn").disabled = state.busy;
     const locked = state.busy;
@@ -327,8 +338,18 @@
     document.querySelectorAll(".ref-add, .ref .rot, .ref .x").forEach((el) => { el.disabled = locked; });
   }
   ["promptText", "promptPhotos"].forEach((id) => $(id).addEventListener("input", updateGenButton));
+  $("seedLock").addEventListener("change", updateGenButton);
+  $("seed").addEventListener("input", updateGenButton);
   $("genMenuBtn").addEventListener("click", () => setGenerateMenu($("genMenu").hidden));
-  $("genForeverBtn").addEventListener("click", () => { setGenerateMenu(false); generate(true); });
+  $("gen4Btn").addEventListener("click", () => { setGenerateMenu(false); generate(4); });
+  $("gen8Btn").addEventListener("click", () => { setGenerateMenu(false); generate(8); });
+  $("genForeverBtn").addEventListener("click", () => { setGenerateMenu(false); generate(null); });
+  $("stopAfterCurrentBtn").addEventListener("click", () => {
+    if (!state.batch) return;
+    state.batch.stopAfterCurrent = true;
+    $("batchStatus").textContent = t("batchStopPending");
+    updateGenButton();
+  });
   document.addEventListener("click", (e) => { if (!e.target.closest(".gen-split")) setGenerateMenu(false); });
 
   // Engine
@@ -369,7 +390,7 @@
   }
 
   // Generate
-  async function generate(continuous = false) {
+  async function generate(count = 1) {
     if ($("genBtn").disabled) return;
     setGenerateMenu(false);
     const snapshot = {
@@ -384,6 +405,9 @@
       lockedSeed: $("seedLock").checked && $("seed").value ? Number($("seed").value) : null,
       seedLocked: $("seedLock").checked && !!$("seed").value,
     };
+    const plan = QilBatch.createBatch(count, Date.now(), snapshot.seedLocked, snapshot.lockedSeed);
+    const isBatch = count !== 1;
+    state.batch = isBatch ? plan : null;
     const runId = ++state.generationRun;
     state.stopRequested = false;
     state.busy = true;
@@ -408,7 +432,7 @@
         images: snapshot.images,
         preset: snapshot.preset,
         aspect,
-        seed: snapshot.seedLocked ? snapshot.lockedSeed : null,
+        seed: QilBatch.requestSeed(plan),
         transparent: snapshot.transparent,
       };
     }
@@ -421,27 +445,51 @@
       renderHistory();
     };
 
+    const renderBatchProgress = () => {
+      if (!isBatch) return;
+      const current = plan.completed + 1;
+      const progress = plan.count === null
+        ? t("batchForeverProgress", plan.completed, current)
+        : t("batchProgress", plan.completed, plan.count, current);
+      $("batchStatus").textContent = progress + (plan.seedLocked ? ` ${t("batchLockedSeed")}` : "");
+    };
+
     try {
-      let iterations = 0;
-      while (continuous || iterations === 0) {
-        if (runId !== state.generationRun || state.stopRequested) break;
+      while (QilBatch.shouldStartNext(plan, Date.now())) {
+        if (runId !== state.generationRun || state.stopRequested || plan.stopAfterCurrent) break;
         const req = await nextRequest();
-        if (runId !== state.generationRun || state.stopRequested) break;
+        if (runId !== state.generationRun || state.stopRequested || plan.stopAfterCurrent) break;
+        renderBatchProgress();
         state.stepTimes = [];
         showWorking("load", 0, 0);
-        const r = await invoke("generate", { req });
-        if (runId !== state.generationRun || state.stopRequested) break;
+        plan.requestActive = true;
+        updateGenButton();
+        const r = await invoke("generate", {
+          req,
+          remainingMs: isBatch ? QilBatch.remainingMs(plan, Date.now()) : null,
+        });
+        plan.requestActive = false;
+        updateGenButton();
         appendResult(r, req);
-        iterations += 1;
-        if (!continuous) break;
+        plan.completed += 1;
+        if (isBatch) renderBatchProgress();
+        if (plan.stopAfterCurrent || state.stopRequested || runId !== state.generationRun) break;
+        if (plan.count === 1) break;
       }
       if (state.stopRequested || runId !== state.generationRun) notify(t("cancelled"), true);
+      else if (plan.stopAfterCurrent) notify(t("batchStopped", plan.completed), true);
+      else if (plan.count !== null && plan.completed === plan.count) notify(t("batchFinished", plan.completed), true);
+      else if (plan.deadlineMs !== null && Date.now() >= plan.deadlineMs) notify(t("batchTimedOut"));
     } catch (e) {
       const msg = String(e);
-      if (msg === "Cancelled") notify(t("cancelled"), true); else notify(msg);
+      if (msg === "Cancelled") notify(t("cancelled"), true);
+      else if (msg.startsWith("Cancelled;")) notify(msg);
+      else notify(msg);
     } finally {
       state.busy = false;
       state.stopRequested = false;
+      state.batch = null;
+      $("batchStatus").textContent = "";
       hideWorking();
       updateGenButton();
       renderHistory();
@@ -496,6 +544,7 @@
     img.hidden = false;
     $("empty").hidden = true;
     const m = item.meta || {};
+    comparison.select(item);
     $("info").hidden = false;
     $("infoPrompt").textContent = m.prompt || item.path.split(/[\\/]/).pop();
     $("infoPrompt").title = m.prompt || "";
@@ -530,6 +579,7 @@
   }
   function clearCurrentPreview() {
     state.current = null;
+    comparison.reset();
     $("shot").hidden = true;
     $("shot").removeAttribute("src");
     $("info").hidden = true;

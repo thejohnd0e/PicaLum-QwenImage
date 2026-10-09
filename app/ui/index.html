@@ -12,6 +12,11 @@
 <strong>PicaLum QwenImage</strong>
       <span class="mono">qwen-image-2.1 · <span id="profileTag">int8</span></span>
     </div>
+    <nav class="mode-nav" id="modeNav" role="tablist" aria-label="Workspace mode" data-i18n-aria="modeNavigation" hidden>
+      <button type="button" role="tab" data-mode="text" aria-selected="true" data-i18n="modeText"></button>
+      <button type="button" role="tab" data-mode="photos" aria-selected="false" data-i18n="modePhotos"></button>
+      <button type="button" role="tab" data-mode="surprise" aria-selected="false" data-i18n="modeSurprise"></button>
+    </nav>
     <div class="status">
       <div class="stat" id="engineStat" hidden>
         <span class="dot" id="engineDot"></span><span id="engineTxt"></span>
@@ -28,7 +33,7 @@
       </button>
       <div class="lang">
         <button class="lang-toggle" id="langToggle" type="button" aria-label="Change language" aria-expanded="false" aria-controls="languageMenu">
-          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"></path></svg>
+          <span id="langLabel" data-i18n="languageShort">EN</span>
         </button>
         <div class="lang-menu" id="languageMenu" role="menu" hidden>
           <button type="button" role="menuitem" data-lang="en">English</button>
@@ -125,12 +130,7 @@
   <div class="app" id="mainView" hidden>
     <aside class="panel">
       <div class="panel-scroll">
-        <section class="group">
-          <div class="seg seg-3" role="tablist">
-            <button type="button" role="tab" data-mode="text" aria-selected="true" data-i18n="modeText"></button>
-            <button type="button" role="tab" data-mode="photos" aria-selected="false" data-i18n="modePhotos"></button>
-            <button type="button" role="tab" data-mode="surprise" aria-selected="false" data-i18n="modeSurprise"></button>
-          </div>
+        <section class="group mode-context">
           <p class="hint" id="modeHint"></p>
         </section>
 
@@ -208,10 +208,17 @@
             <span class="chevron" aria-hidden="true"></span>
           </button>
           <div class="gen-menu" id="genMenu" role="menu" hidden>
+            <button type="button" class="gen-menu-item" id="gen4Btn" role="menuitem" data-i18n="generate4"></button>
+            <button type="button" class="gen-menu-item" id="gen8Btn" role="menuitem" data-i18n="generate8"></button>
             <button type="button" class="gen-menu-item" id="genForeverBtn" role="menuitem" data-i18n="generateForever"></button>
+            <p class="batch-seed-warning" id="batchSeedWarning" data-i18n="batchLockedSeed" hidden></p>
           </div>
         </div>
-        <button type="button" class="btn btn-block" id="cancelBtn" data-i18n="cancel" hidden></button>
+        <div class="batch-running" id="batchRunning" hidden>
+          <p id="batchStatus" aria-live="polite"></p>
+          <button type="button" class="btn btn-block" id="stopAfterCurrentBtn" data-i18n="stopAfterCurrent" hidden></button>
+        </div>
+        <button type="button" class="btn btn-block" id="cancelBtn" data-i18n="cancelNow" hidden></button>
         <p class="kbd mono" data-i18n="kbd"></p>
       </div>
     </aside>
@@ -219,11 +226,47 @@
     <main class="stage">
       <div class="progress" id="progress"><div class="progress-fill" id="progressFill"></div></div>
       <div class="viewer" id="viewer">
+        <div class="viewer-toolbar" id="viewerToolbar" hidden>
+          <div class="compare-controls" id="compareControls" role="group" aria-label="Image comparison" data-i18n-aria="compareControls">
+            <button type="button" class="viewer-control" id="viewResult" data-i18n="compareResult"></button>
+            <button type="button" class="viewer-control" id="viewSideBySide" data-i18n="compareSideBySide"></button>
+            <button type="button" class="viewer-control" id="viewWipe" data-i18n="compareWipe"></button>
+          </div>
+          <div class="zoom-controls" id="zoomControls" hidden>
+            <button type="button" class="viewer-control" id="zoomFit" data-i18n="fit"></button>
+            <button type="button" class="viewer-control" id="zoom100" data-i18n="zoom100"></button>
+          </div>
+        </div>
         <div class="empty" id="empty">
           <p class="empty-title" data-i18n="emptyTitle"></p>
           <p class="muted"><span data-i18n="emptyText"></span> <span class="mono" id="outDirTxt"></span></p>
         </div>
         <img id="shot" alt="" hidden>
+        <div class="compare-view" id="compareView" hidden>
+          <div class="compare-panes" id="comparePanes">
+            <div class="compare-pane" id="beforePane" data-side="before">
+              <span class="compare-label" data-i18n="before"></span>
+              <img id="beforeShot" alt="">
+              <span class="compare-dimensions" id="beforeDims"></span>
+              <span class="compare-error" id="beforeError" data-i18n="compareReferenceUnavailable" hidden></span>
+            </div>
+            <div class="compare-pane" id="afterPane" data-side="after">
+              <span class="compare-label" data-i18n="after"></span>
+              <img id="afterShot" alt="">
+              <span class="compare-dimensions" id="afterDims"></span>
+              <span class="compare-error" id="afterError" data-i18n="compareImageUnavailable" hidden></span>
+            </div>
+          </div>
+          <div class="wipe-stage" id="wipeStage" hidden>
+            <div class="wipe-layer wipe-after"><img id="wipeAfter" alt=""><span class="compare-label compare-label-after" data-i18n="after"></span></div>
+            <div class="wipe-layer wipe-before" id="wipeBeforeLayer"><img id="wipeBefore" alt=""><span class="compare-label" data-i18n="before"></span></div>
+            <button type="button" class="wipe-divider" id="wipeDivider" role="slider" tabindex="0" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" data-i18n-aria="compareDivider">
+              <span aria-hidden="true"></span>
+            </button>
+            <span class="wipe-dimensions" id="wipeDims"></span>
+          </div>
+          <p class="compare-note" id="compareNote" data-i18n="compareDifferentSizes" hidden></p>
+        </div>
         <div class="working" id="working" hidden>
           <p class="w-stage" id="wStage"></p>
           <p class="w-step mono" id="wStep"></p>
@@ -253,6 +296,9 @@
   <div class="dropveil" id="dropveil" hidden><p data-i18n="dropHere"></p></div>
 
   <script src="i18n.js"></script>
+  <script src="generation-batch.js"></script>
+  <script src="viewer.js"></script>
+  <script src="viewer-controller.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

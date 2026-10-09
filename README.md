@@ -60,7 +60,7 @@ Qwen-Image-2.1 came out on September 20, 2026. It is the first open-weight image
 |---|---|---|
 | **Create** | Text → image | Draft 1024² · Standard 1.6 MP · Max native 2K, seven aspect ratios, lockable seed |
 | **Transparency** | Native RGBA | Real alpha channel from the model, no background-removal tricks |
-| **Edit** | 1–10 reference photos | Relight, restyle, remove objects or people, rewrite signs, combine subjects; the first photo is the canvas |
+| **Edit** | 1–10 reference photos | Relight, restyle, remove objects or people, rewrite signs, combine subjects; the first photo is the canvas. Save and manage reusable prompt presets in the app. |
 | **Surprise me** | Idea generator | Style × subject × place × light, or a curated idea; optional theme |
 | **Setup** | One-command build + one-time install | Pinned ComfyUI, Python 3.12, PyTorch CUDA 13, weights with resume and SHA-256 checks |
 | **CLI** | `qil` | `doctor` · `setup` · `generate` · `edit` · `surprise` · `bench` · `config` |
@@ -209,6 +209,8 @@ qil bench --suite bench/suite.json --preset max       # reproduce the published 
 Pass `--keep-engine` to leave the engine running between calls so each one skips the start-up.
 
 Generated images are saved by default to the bundled runtime's `ComfyUI/output` folder. Change the output folder in desktop settings or with `qil config --output-dir`; the CLI also accepts `--out` for a one-command destination. The desktop app can create an adjacent JSON metadata file, while prompt and model metadata are always embedded in each PNG. History is kept only for the current app session: **Clear history** and app restart reset the in-app list without deleting saved files.
+
+Edit-mode prompt presets store an editable name and prompt text locally at `<runtime_dir>/presets.json`. The default location is `%LOCALAPPDATA%\picalum-qwenimage\presets.json`; presets do not change quality, format, seed, or reference-photo settings.
 
 ## VRAM profiles
 

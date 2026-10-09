@@ -70,6 +70,35 @@
     </section>
   </div>
 
+  <div class="settings-backdrop prompt-presets-backdrop" id="promptPresetsBackdrop" hidden>
+    <section class="settings-dialog prompt-presets-dialog" id="promptPresetsDialog" role="dialog" aria-modal="true" aria-labelledby="promptPresetsHeading" tabindex="-1">
+      <h2 id="promptPresetsHeading" data-i18n="promptPresetsTitle"></h2>
+      <div class="prompt-presets-layout">
+        <div class="prompt-presets-list-wrap">
+          <div class="prompt-presets-list" id="promptPresetsList" role="group" aria-label="Prompt presets" data-i18n-aria="promptPresetsTitle"></div>
+          <div class="prompt-presets-list-actions">
+            <button type="button" class="btn btn-sm" id="promptPresetNew" data-i18n="promptPresetNew"></button>
+            <button type="button" class="btn btn-sm" id="promptPresetDuplicate" data-i18n="promptPresetDuplicate"></button>
+            <button type="button" class="btn btn-sm" id="promptPresetDelete" data-i18n="promptPresetDelete"></button>
+          </div>
+        </div>
+        <div class="prompt-presets-fields">
+          <label class="label" for="promptPresetName" data-i18n="promptPresetName"></label>
+          <input id="promptPresetName" type="text" maxlength="80" autocomplete="off">
+          <label class="label" for="promptPresetPrompt" data-i18n="promptPresetPrompt"></label>
+          <textarea id="promptPresetPrompt" rows="8" spellcheck="false"></textarea>
+          <button type="button" class="btn btn-sm prompt-presets-from-current" id="promptPresetFromCurrent" data-i18n="promptPresetFromCurrent"></button>
+        </div>
+      </div>
+      <p class="settings-error" id="promptPresetsError" role="alert" aria-live="polite" hidden></p>
+      <button type="button" class="btn btn-sm prompt-presets-retry" id="promptPresetsRetry" data-i18n="promptPresetsRetry" hidden></button>
+      <div class="settings-actions">
+        <button type="button" class="btn" id="promptPresetsCancel" data-i18n="promptPresetsCancel"></button>
+        <button type="button" class="btn btn-primary" id="promptPresetsSave" data-i18n="save"></button>
+      </div>
+    </section>
+  </div>
+
   <!-- ── First run ── -->
   <section class="setup" id="setupView" hidden>
     <div class="setup-inner">
@@ -141,8 +170,7 @@
         </section>
 
         <section class="group" data-show="text">
-          <label class="label" for="promptText" data-i18n="description"></label>
-          <textarea id="promptText" rows="7" spellcheck="false" data-i18n-ph="descPh"></textarea>
+          <textarea id="promptText" rows="7" spellcheck="false" data-i18n-ph="descPh" data-i18n-aria="description"></textarea>
           <label class="check"><input type="checkbox" id="transparent"> <span data-i18n="transparent"></span> <span class="mono muted">PNG + alpha</span></label>
         </section>
 
@@ -155,7 +183,12 @@
           <p class="hint" data-i18n-html="refsHint"></p>
           <label class="label" for="promptPhotos" data-i18n="instruction"></label>
           <textarea id="promptPhotos" rows="5" spellcheck="false" data-i18n-ph="instrPh"></textarea>
-          <div class="quick" id="quick"></div>
+          <div class="prompt-preset-controls">
+            <select class="prompt-preset-select" id="promptPresetSelect" data-i18n-aria="promptPresetChoose">
+              <option value="" data-i18n="promptPresetChoose"></option>
+            </select>
+            <button type="button" class="btn btn-sm" id="promptPresetManage" data-i18n="promptPresetsManage"></button>
+          </div>
         </section>
 
         <section class="group" data-show="surprise" hidden>
@@ -303,6 +336,7 @@
 
   <script src="i18n.js"></script>
   <script src="generation-batch.js"></script>
+  <script src="prompt-presets.js"></script>
   <script src="viewer.js"></script>
   <script src="viewer-controller.js"></script>
   <script src="app.js"></script>

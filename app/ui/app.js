@@ -9,14 +9,6 @@
 
   const MAX_REFS = 10;
   const GITHUB_URL = "https://github.com/thejohnd0e/PicaLum-QwenImage";
-  const QUICK = [
-    ["qRemoveBg", "Remove the background, and output a PNG image"],
-    ["qSnow", "Change the scene to a snowy winter night with warm lights in the windows. Keep everything else the same."],
-    ["qWatercolor", "Turn this photo into a hand-painted watercolor illustration. Keep the composition."],
-    ["qGolden", "Relight this photo as a golden-hour scene with soft warm sunlight. Keep the subject and composition identical."],
-    ["qNoPeople", "Remove all the people from the photo and fill the background naturally. Keep everything else identical."],
-    ["qCombine", "Place the subject from <image2> into the scene of <image1>, matching lighting and perspective, with a realistic contact shadow."],
-  ];
   const STAGE_KEY = { upload: "stUpload", load: "stLoad", encode: "stEncode", sample: "stSample", decode: "stDecode", save: "stSave" };
   const PRESET_KEY = { draft: "pDraft", standard: "pStandard", max: "pMax" };
 
@@ -47,6 +39,18 @@
     stepState: {}, // id -> {state, detail, done, total, bps}
   };
   const comparison = window.QilComparison.create({ state, getElement: $, fileSrc, translate: t });
+  const promptPresets = window.QilPromptPresets.create({
+    invoke,
+    getElement: $,
+    translate: t,
+    getPrompt: () => $("promptPhotos").value,
+    applyPrompt: (prompt) => {
+      $("promptPhotos").value = prompt;
+      updateGenButton();
+    },
+    notify,
+    isBusy: () => state.busy,
+  });
 
   function localGet(k, d) { try { return localStorage.getItem("qil." + k) ?? d; } catch { return d; } }
   function localSet(k, v) { try { localStorage.setItem("qil." + k, v); } catch { /* no storage */ } }
@@ -191,6 +195,7 @@
     $("profileTag").textContent = p;
     invoke("output_dir").then((d) => { $("outDirTxt").textContent = d; }).catch(() => {});
     loadHistory();
+    promptPresets.load();
     startEngine();
   }
 
@@ -288,19 +293,6 @@
     }
     $("refCount").textContent = `${state.refs.length} / ${MAX_REFS}`;
   }
-  function renderQuick() {
-    const q = $("quick");
-    q.innerHTML = "";
-    for (const [key, prompt] of QUICK) {
-      const b = document.createElement("button");
-      b.type = "button";
-      b.className = "btn btn-xs";
-      b.textContent = t(key);
-      b.addEventListener("click", () => { $("promptPhotos").value = prompt; updateGenButton(); });
-      q.appendChild(b);
-    }
-  }
-
   // Generate button: the label says what will happen
   function currentPrompt() {
     if (state.mode === "text") return $("promptText").value.trim();
@@ -335,8 +327,9 @@
     $("clearHistoryBtn").disabled = state.busy || state.history.length === 0;
     $("settingsBtn").disabled = state.busy;
     const locked = state.busy;
-    document.querySelectorAll("[data-mode], #promptText, #promptPhotos, #theme, #transparent, #seedLock, #seed, #presets [data-preset], #aspects [data-ar], #quick button").forEach((el) => { el.disabled = locked; });
+    document.querySelectorAll("[data-mode], #promptText, #promptPhotos, #theme, #transparent, #seedLock, #seed, #presets [data-preset], #aspects [data-ar]").forEach((el) => { el.disabled = locked; });
     document.querySelectorAll(".ref-add, .ref .rot, .ref .x").forEach((el) => { el.disabled = locked; });
+    promptPresets.setDisabled(locked);
   }
   ["promptText", "promptPhotos"].forEach((id) => $(id).addEventListener("input", updateGenButton));
   $("seedLock").addEventListener("change", updateGenButton);
@@ -715,6 +708,10 @@
 
   // Keyboard
   document.addEventListener("keydown", (e) => {
+    if (promptPresets.isOpen()) {
+      promptPresets.handleKeydown(e);
+      return;
+    }
     if (!$("settingsBackdrop").hidden && e.key === "Tab") {
       const controls = [...$("settingsDialog").querySelectorAll("button:not(:disabled), input:not(:disabled)")];
       const first = controls[0], last = controls[controls.length - 1];
@@ -753,7 +750,7 @@
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeLangMenu(); });
   window.addEventListener("langchange", () => {
     renderModeHint();
-    renderQuick();
+    promptPresets.render({ preserveForm: true });
     renderRefs();
     renderHistory();
     renderEngine();
@@ -789,7 +786,7 @@
       if (typeof version === "string" && version) $("appVersion").textContent = `v${version}`;
     }).catch(() => {});
     setMode("text");
-    renderQuick();
+    promptPresets.render();
     renderRefs();
     await wireEvents();
     pollGpu();

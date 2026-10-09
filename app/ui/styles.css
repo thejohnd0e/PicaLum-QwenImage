@@ -56,14 +56,20 @@ code { font-family: var(--font-mono); font-size: 11px; background: var(--sunken)
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: 44px;
-  padding: 0 24px;
+  gap: 32px;
+  padding: 0 20px;
   background: var(--panel);
   border-bottom: 1px solid var(--border);
 }
-.brand { display: flex; align-items: baseline; gap: 10px; }
+.brand { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.brand-copy { min-width: 0; display: flex; flex-direction: column; justify-content: center; line-height: 1.25; }
 .brand strong { font-size: 13.5px; font-weight: 600; letter-spacing: -0.01em; }
-.brand .mono { color: var(--text-faint); font-size: 11px; }
+.brand-meta { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
+.brand-model { color: var(--text-faint); font-size: 10px; }
+.version-tag { color: var(--text-muted); font: 600 10px var(--font-mono); }
+.github-link { padding: 3px 6px; border: 1px solid transparent; border-radius: 5px; color: var(--text-muted); font: 500 11px var(--font-sans); text-decoration: none; white-space: nowrap; }
+.github-link:hover { border-color: var(--border); background: var(--hover); color: var(--text); }
+.github-link:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 
 .mode-nav { display: flex; align-items: center; gap: 28px; height: 100%; }
 .mode-nav button { height: 100%; padding: 0 2px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--text-muted); font: 500 13px var(--font-sans); cursor: pointer; }
@@ -423,7 +429,7 @@ input.mono { font-family: var(--font-mono); font-size: 12px; }
 }
 @media (max-width: 680px) {
   .app { grid-template-columns: minmax(0, 1fr) 280px; }
-  .brand .mono { display: none; }
+  .brand-model { display: none; }
   .topbar { gap: 4px; padding: 0 6px; }
   .status { gap: 4px; }
   .stat + .stat { padding-left: 4px; }

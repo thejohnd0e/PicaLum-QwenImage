@@ -8,6 +8,7 @@
   const t = (...a) => window.i18n.t(...a);
 
   const MAX_REFS = 10;
+  const GITHUB_URL = "https://github.com/thejohnd0e/PicaLum-QwenImage";
   const QUICK = [
     ["qRemoveBg", "Remove the background, and output a PNG image"],
     ["qSnow", "Change the scene to a snowy winter night with warm lights in the windows. Keep everything else the same."],
@@ -744,6 +745,10 @@
     window.i18n.set(b.dataset.lang);
     closeLangMenu();
   }));
+  $("githubLink").addEventListener("click", (event) => {
+    event.preventDefault();
+    invoke("open_url", { url: GITHUB_URL }).catch((error) => notify(String(error)));
+  });
   document.addEventListener("click", (e) => { if (!e.target.closest(".lang")) closeLangMenu(); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeLangMenu(); });
   window.addEventListener("langchange", () => {
@@ -780,6 +785,9 @@
   // Boot
   (async () => {
     window.i18n.apply();
+    invoke("app_version").then((version) => {
+      if (typeof version === "string" && version) $("appVersion").textContent = `v${version}`;
+    }).catch(() => {});
     setMode("text");
     renderQuick();
     renderRefs();

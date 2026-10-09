@@ -1,0 +1,12 @@
+{
+  "name": "picalum-qwenimage",
+  "private": true,
+  "version": "0.1.3",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}

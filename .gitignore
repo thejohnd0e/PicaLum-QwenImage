@@ -1,0 +1,9 @@
+/target/
+/out/
+node_modules/
+app/src-tauri/gen/
+dist/
+assets/banner-candidates/
+bench/tiers/results/*/*
+!bench/tiers/results/*/results.json
+*.log

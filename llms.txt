@@ -1,0 +1,20 @@
+# PicaLum QwenImage
+
+> Desktop app (Windows) and CLI that run Qwen-Image-2.1, Alibaba's 7B open-weight image generation and editing model released on 2026-09-20, fully in VRAM on a 12 GB NVIDIA GPU such as an RTX 3060. Includes a one-click installer and a published 20-test benchmark against gpt-image-2.
+
+Key facts, all measured on an RTX 3060 12 GB:
+- About 35 s per 1024x1024 image (20 steps), about 7 minutes at native 2K (40 steps), about 50 s for a 1024 px photo edit.
+- Peak VRAM 11.4 GB (balanced profile, int8 text encoder) or 8.9 GB (compact profile, w4a8 encoder, experimental). 8 GB cards are untested.
+- How it fits: text encoder (8.9 GB), image model (6.9 GB) and VAE (0.6 GB) run one stage at a time, each loaded completely into VRAM; int8 "convrot" weights; PyTorch built for CUDA 13.
+- Benchmark vs gpt-image-2 (one run each, 20 prompts): photo editing 7 ties + 1 Qwen win out of 8; text-to-image gpt-image-2 won 11 of 12. Overall: Qwen 1, tie 8, gpt-image-2 11.
+- License: app is MIT; Qwen-Image-2.1 weights are under the Qwen Research License (non-commercial). Unofficial project.
+- Alternative for AMD, Intel, Apple Silicon or GPUs under 8 GB: nihui/qwenimage-ncnn-vulkan.
+
+## Docs
+- [README](https://github.com/thejohnd0e/PicaLum-QwenImage/blob/main/README.md): install, CLI, VRAM profiles, limitations
+- [Benchmark page](https://thejohnd0e.github.io/PicaLum-QwenImage/): every image, prompt, timing and verdict
+- [Benchmark data](https://github.com/thejohnd0e/PicaLum-QwenImage/tree/main/bench): suite.json, verdicts.json, results
+
+## Optional
+- [Changelog](https://github.com/thejohnd0e/PicaLum-QwenImage/blob/main/CHANGELOG.md)
+- [Qwen-Image-2.1 official repo](https://github.com/QwenLM/Qwen-Image-2.1)

@@ -1,0 +1,199 @@
+// UI strings. English first (public release); Russian or Spanish picked automatically from the OS language.
+(() => {
+  const S = {
+    en: {
+      openFolder: "Open folder",
+      settingsTitle: "Output settings", outputFolder: "Output folder", jsonSidecars: "Create JSON metadata files",
+      embeddedPngNote: "The prompt and model are always embedded in each PNG for compatibility with metadata readers.",
+      save: "Save", invalidFolder: "Choose a valid absolute folder.", settingsBusy: "Settings cannot be changed while generation is running.", settingsSaveFailed: "Could not save settings: ",
+      engineReady: "Engine ready", engineReadyExt: "Engine ready (external)", engineStarting: "Starting engine",
+      engineError: "Engine error", engineOff: "Engine off", stopEngine: "Stop engine", startEngine: "Start engine", starting: "Starting…",
+      externalTip: "Another program started this engine; close it from there.",
+setupTitle: "Set up PicaLum QwenImage",
+      setupLead: "A one-time install. Everything runs on your GPU; nothing you generate leaves your computer.",
+      yourGpu: "Your GPU", vramProfile: "VRAM profile", recommended: "recommended",
+      profBalanced: "Balanced · 12 GB+", profBalancedMeta: "int8 encoder · tested on RTX 3060",
+      profCompact: "Compact · ~10 GB", profCompactMeta: "w4a8 encoder · −2.5 GB · experimental",
+      modelsFolder: "Models folder", change: "Change…",
+      modelsHint: "Needs about 17 GB. Already have the Qwen-Image-2.1 weights? Point here to that folder and they won't download again.",
+      whatInstalls: "What gets installed", details: "Details",
+      licenseNote: "Qwen-Image-2.1 is released by Alibaba under the Qwen Research License (non-commercial). This app is MIT and unofficial.",
+      install: (s) => `Install · ${s}`, installing: "Installing…", retry: "Retry install", startApp: "Start creating",
+      toDownload: "to download", free: "free", nothingToDownload: "Nothing to download",
+      noGpu: "No NVIDIA GPU detected", driver: "driver",
+      stepUv: "uv (Python manager)", stepComfy: "ComfyUI engine", stepPython: "Python 3.12", stepDeps: "PyTorch CUDA 13 + packages",
+      done: "done", skipped: "already there", waiting: "waiting", failed: "failed", verifying: "verifying checksum",
+      modeText: "Text", modePhotos: "Photos", modeSurprise: "Surprise me",
+      hintText: "Describe the image you want.", hintPhotos: "Edit or combine up to 10 photos with one instruction.",
+      hintSurprise: "The app invents the whole idea. Just press Generate.",
+      description: "Description", descPh: "Editorial portrait of an old fisherman at golden hour, 85mm, grazing light, real skin texture…",
+      transparent: "Transparent background",
+      references: "References", instruction: "Instruction",
+      refsHint: "The first photo is the canvas: the result keeps its framing. Refer to them as <code>&lt;image1&gt;</code>, <code>&lt;image2&gt;</code>…",
+      instrPh: "Turn it into a snowy winter night. Keep the people, signs and framing.",
+      qRemoveBg: "Remove background", qSnow: "Snowy night", qWatercolor: "Watercolor", qGolden: "Golden hour", qNoPeople: "Remove people", qCombine: "Combine 1 + 2",
+      theme: "Theme", optional: "(optional)", themePh: "cats, Buenos Aires, sci-fi…",
+      surpriseHint: "Every run builds a different idea: subject, style, light and format. A theme is used as the starting point.",
+      lastIdea: "Last idea", editAsText: "Edit as text",
+      quality: "Quality", pDraft: "Draft", pStandard: "Standard", pMax: "Max",
+      presetLegend: "size · steps · time on an RTX 3060",
+      format: "Format", random: "Random", seed: "Seed", lock: "Lock", seedPh: "random", generateForever: "Generate forever",
+      cancel: "Cancel", kbd: "Ctrl + Enter to generate · Esc to cancel",
+      emptyTitle: "No image yet", emptyText: "Pick a mode on the left and press Generate. Images are saved to",
+      close: "Close", copyPrompt: "Copy prompt", useSeed: "Use seed", editThis: "Edit this image", showInFolder: "Show in folder", open: "Open",
+      history: "History", clearHistory: "Clear history", historyEmpty: "Your images will show up here.", dropHere: "Drop photos to use them as references",
+      add: "Add", dropOrClick: "Drag photos here or click",
+      gen: "Generate", genSurprise: "Surprise me", genEdit: "Edit photo", genWith: (n) => `Generate with ${n} photos`,
+      generating: "Generating…", engineOffBtn: "Engine off", needPhoto: "Add at least one photo",
+      needInstr: "Write an instruction", needDesc: "Write a description",
+      stUpload: "Uploading references", stLoad: "Loading models on the GPU", stEncode: "Reading the prompt", stSample: "Generating",
+      stDecode: "Decoding the image", stSave: "Saving", firstSlow: "The first run takes a bit longer",
+      step: (v, m) => `Step ${v} / ${m}`, perStep: "s/step", left: "left",
+      cancelled: "Generation cancelled.", copied: "Prompt copied.", copyFail: "Could not copy.",
+      limitRefs: (a, b, m) => `Added ${a} of ${b}: the limit is ${m} references.`,
+      canvas: "Canvas", remove: "Remove", rotate: "Rotate 90°", refs: "refs",
+      eventsFail: "Could not register events (check capabilities/default.json): ",
+    },
+    ru: {
+      openFolder: "Открыть папку",
+      settingsTitle: "Настройки сохранения", outputFolder: "Папка сохранения", jsonSidecars: "Создавать JSON-файлы с метаданными",
+      embeddedPngNote: "Запрос и модель всегда встраиваются в PNG для совместимости с программами чтения метаданных.",
+      save: "Сохранить", invalidFolder: "Выберите допустимую абсолютную папку.", settingsBusy: "Настройки нельзя изменить во время генерации.", settingsSaveFailed: "Не удалось сохранить настройки: ",
+      engineReady: "Движок готов", engineReadyExt: "Движок готов (внешний)", engineStarting: "Запуск движка",
+      engineError: "Ошибка движка", engineOff: "Движок выключен", stopEngine: "Остановить движок", startEngine: "Запустить движок", starting: "Запуск…",
+      externalTip: "Этот движок запущен другой программой; закройте его там.",
+setupTitle: "Настройка PicaLum QwenImage",
+      setupLead: "Установка выполняется один раз. Всё работает на вашем GPU; созданные изображения не покидают компьютер.",
+      yourGpu: "Ваш GPU", vramProfile: "Профиль VRAM", recommended: "рекомендуется",
+      profBalanced: "Сбалансированный · 12 ГБ+", profBalancedMeta: "кодировщик int8 · проверено на RTX 3060",
+      profCompact: "Компактный · ~10 ГБ", profCompactMeta: "кодировщик w4a8 · −2,5 ГБ · экспериментальный",
+      modelsFolder: "Папка моделей", change: "Изменить…",
+      modelsHint: "Требуется около 17 ГБ. Уже есть веса Qwen-Image-2.1? Укажите эту папку, и повторная загрузка не понадобится.",
+      whatInstalls: "Что будет установлено", details: "Подробности",
+      licenseNote: "Qwen-Image-2.1 выпущен Alibaba по лицензии Qwen Research License (для некоммерческого использования). Это приложение распространяется по лицензии MIT и не является официальным.",
+      install: (s) => `Установить · ${s}`, installing: "Установка…", retry: "Повторить установку", startApp: "Начать создание",
+      toDownload: "к загрузке", free: "свободно", nothingToDownload: "Ничего загружать не нужно",
+      noGpu: "GPU NVIDIA не обнаружен", driver: "драйвер",
+      stepUv: "uv (менеджер Python)", stepComfy: "Движок ComfyUI", stepPython: "Python 3.12", stepDeps: "PyTorch CUDA 13 + пакеты",
+      done: "готово", skipped: "уже есть", waiting: "ожидание", failed: "ошибка", verifying: "проверка контрольной суммы",
+      modeText: "Текст", modePhotos: "Фото", modeSurprise: "Удиви меня",
+      hintText: "Опишите изображение, которое хотите создать.", hintPhotos: "Изменяйте или объединяйте до 10 фото по одной инструкции.",
+      hintSurprise: "Приложение само придумает идею. Просто нажмите «Создать».",
+      description: "Описание", descPh: "Редакционный портрет старого рыбака в золотой час, 85 мм, скользящий свет, естественная текстура кожи…",
+      transparent: "Прозрачный фон",
+      references: "Исходные фото", instruction: "Инструкция",
+      refsHint: "Первое фото — это холст: результат сохранит его кадрирование. Ссылайтесь на фото как <code>&lt;image1&gt;</code>, <code>&lt;image2&gt;</code>…",
+      instrPh: "Превратите сцену в снежную зимнюю ночь. Сохраните людей, вывески и кадрирование.",
+      qRemoveBg: "Удалить фон", qSnow: "Снежная ночь", qWatercolor: "Акварель", qGolden: "Золотой час", qNoPeople: "Удалить людей", qCombine: "Объединить 1 + 2",
+      theme: "Тема", optional: "(необязательно)", themePh: "кошки, Москва, научная фантастика…",
+      surpriseHint: "Каждый запуск создаёт новую идею: объект, стиль, свет и формат. Тема используется как отправная точка.",
+      lastIdea: "Последняя идея", editAsText: "Изменить как текст",
+      quality: "Качество", pDraft: "Черновик", pStandard: "Стандарт", pMax: "Максимум",
+      presetLegend: "размер · шаги · время на RTX 3060",
+      format: "Формат", random: "Случайный", seed: "Сид", lock: "Закрепить", seedPh: "случайный", generateForever: "Создавать без остановки",
+      cancel: "Отмена", kbd: "Ctrl + Enter — создать · Esc — отменить",
+      emptyTitle: "Изображений пока нет", emptyText: "Выберите режим слева и нажмите «Создать». Изображения сохраняются в",
+      close: "Закрыть", copyPrompt: "Копировать запрос", useSeed: "Использовать сид", editThis: "Изменить это изображение", showInFolder: "Показать в папке", open: "Открыть",
+      history: "История", clearHistory: "Очистить историю", historyEmpty: "Здесь появятся созданные изображения.", dropHere: "Перетащите фото сюда, чтобы использовать их как исходные",
+      add: "Добавить", dropOrClick: "Перетащите фото или нажмите",
+      gen: "Создать", genSurprise: "Удиви меня", genEdit: "Изменить фото", genWith: (n) => `Создать с ${n} фото`,
+      generating: "Создание…", engineOffBtn: "Движок выключен", needPhoto: "Добавьте хотя бы одно фото",
+      needInstr: "Напишите инструкцию", needDesc: "Напишите описание",
+      stUpload: "Загрузка исходных фото", stLoad: "Загрузка моделей в GPU", stEncode: "Чтение запроса", stSample: "Создание",
+      stDecode: "Декодирование изображения", stSave: "Сохранение", firstSlow: "Первый запуск занимает немного больше времени",
+      step: (v, m) => `Шаг ${v} / ${m}`, perStep: "с/шаг", left: "осталось",
+      cancelled: "Создание отменено.", copied: "Запрос скопирован.", copyFail: "Не удалось скопировать.",
+      limitRefs: (a, b, m) => `Добавлено ${a} из ${b}: лимит — ${m} исходных фото.`,
+      canvas: "Холст", remove: "Удалить", rotate: "Повернуть на 90°", refs: "фото",
+      eventsFail: "Не удалось зарегистрировать события (проверьте capabilities/default.json): ",
+    },
+    es: {
+      openFolder: "Abrir carpeta",
+      settingsTitle: "Ajustes de guardado", outputFolder: "Carpeta de salida", jsonSidecars: "Crear archivos JSON de metadatos",
+      embeddedPngNote: "El prompt y el modelo siempre se incluyen en cada PNG para compatibilidad con lectores de metadatos.",
+      save: "Guardar", invalidFolder: "Elige una carpeta absoluta válida.", settingsBusy: "No se pueden cambiar los ajustes durante la generación.", settingsSaveFailed: "No se pudieron guardar los ajustes: ",
+      engineReady: "Motor listo", engineReadyExt: "Motor listo (externo)", engineStarting: "Encendiendo motor",
+      engineError: "Motor con error", engineOff: "Motor apagado", stopEngine: "Apagar motor", startEngine: "Encender motor", starting: "Encendiendo…",
+      externalTip: "Este motor lo abrió otro programa; ciérralo desde ahí.",
+setupTitle: "Configurar PicaLum QwenImage",
+      setupLead: "Se instala una sola vez. Todo corre en tu GPU; nada de lo que generes sale de tu computadora.",
+      yourGpu: "Tu GPU", vramProfile: "Perfil de VRAM", recommended: "recomendado",
+      profBalanced: "Equilibrado · 12 GB+", profBalancedMeta: "codificador int8 · probado en RTX 3060",
+      profCompact: "Compacto · ~10 GB", profCompactMeta: "codificador w4a8 · −2,5 GB · experimental",
+      modelsFolder: "Carpeta de modelos", change: "Cambiar…",
+      modelsHint: "Necesita unos 17 GB. ¿Ya tienes los pesos de Qwen-Image-2.1? Elige esa carpeta y no se volverán a descargar.",
+      whatInstalls: "Qué se instala", details: "Detalles",
+      licenseNote: "Qwen-Image-2.1 lo publica Alibaba bajo la Qwen Research License (no comercial). Esta app es MIT y no oficial.",
+      install: (s) => `Instalar · ${s}`, installing: "Instalando…", retry: "Reintentar", startApp: "Empezar a crear",
+      toDownload: "a descargar", free: "libres", nothingToDownload: "Nada que descargar",
+      noGpu: "No se detectó una GPU NVIDIA", driver: "controlador",
+      stepUv: "uv (gestor de Python)", stepComfy: "Motor ComfyUI", stepPython: "Python 3.12", stepDeps: "PyTorch CUDA 13 + paquetes",
+      done: "listo", skipped: "ya estaba", waiting: "en espera", failed: "falló", verifying: "verificando checksum",
+      modeText: "Texto", modePhotos: "Fotos", modeSurprise: "Sorpréndeme",
+      hintText: "Describe la imagen que quieres crear.", hintPhotos: "Edita o combina hasta 10 fotos con una instrucción.",
+      hintSurprise: "La app inventa la idea completa. Solo pulsa Generar.",
+      description: "Descripción", descPh: "Retrato editorial de un pescador al atardecer, 85 mm, luz rasante, textura de piel real…",
+      transparent: "Fondo transparente",
+      references: "Referencias", instruction: "Instrucción",
+      refsHint: "La primera foto es el lienzo: el resultado conserva su encuadre. Refiérete a ellas como <code>&lt;image1&gt;</code>, <code>&lt;image2&gt;</code>…",
+      instrPh: "Convierte la escena en una noche de invierno con nieve. Conserva las personas, los carteles y el encuadre.",
+      qRemoveBg: "Quitar fondo", qSnow: "Noche nevada", qWatercolor: "Acuarela", qGolden: "Hora dorada", qNoPeople: "Quitar personas", qCombine: "Combinar 1 + 2",
+      theme: "Tema", optional: "(opcional)", themePh: "gatos, Buenos Aires, ciencia ficción…",
+      surpriseHint: "Cada ejecución crea una idea distinta: sujeto, estilo, luz y formato. El tema se usa como punto de partida.",
+      lastIdea: "Última idea", editAsText: "Editar como texto",
+      quality: "Calidad", pDraft: "Borrador", pStandard: "Estándar", pMax: "Máxima",
+      presetLegend: "tamaño · pasos · tiempo en una RTX 3060",
+      format: "Formato", random: "Aleatorio", seed: "Semilla", lock: "Fijar", seedPh: "aleatoria", generateForever: "Generar sin parar",
+      cancel: "Cancelar", kbd: "Ctrl + Enter para generar · Esc para cancelar",
+      emptyTitle: "Aún no hay imágenes", emptyText: "Elige un modo a la izquierda y pulsa Generar. Las imágenes se guardan en",
+      close: "Cerrar", copyPrompt: "Copiar prompt", useSeed: "Usar semilla", editThis: "Editar esta imagen", showInFolder: "Mostrar en carpeta", open: "Abrir",
+      history: "Historial", clearHistory: "Borrar historial", historyEmpty: "Tus imágenes aparecerán aquí.", dropHere: "Suelta fotos para usarlas como referencias",
+      add: "Añadir", dropOrClick: "Arrastra fotos aquí o haz clic",
+      gen: "Generar", genSurprise: "Sorpréndeme", genEdit: "Editar foto", genWith: (n) => `Generar con ${n} fotos`,
+      generating: "Generando…", engineOffBtn: "Motor apagado", needPhoto: "Añade al menos una foto",
+      needInstr: "Escribe una instrucción", needDesc: "Escribe una descripción",
+      stUpload: "Subiendo referencias", stLoad: "Cargando modelos en la GPU", stEncode: "Leyendo el prompt", stSample: "Generando",
+      stDecode: "Decodificando la imagen", stSave: "Guardando", firstSlow: "La primera vez tarda un poco más",
+      step: (v, m) => `Paso ${v} / ${m}`, perStep: "s/paso", left: "restantes",
+      cancelled: "Generación cancelada.", copied: "Prompt copiado.", copyFail: "No se pudo copiar.",
+      limitRefs: (a, b, m) => `Se añadieron ${a} de ${b}: el límite es de ${m} referencias.`,
+      canvas: "Lienzo", remove: "Quitar", rotate: "Girar 90°", refs: "ref.",
+      eventsFail: "No se pudieron registrar los eventos (revisa capabilities/default.json): ",
+    },
+  };
+
+  const pick = () => {
+    try {
+      const saved = localStorage.getItem("qil.lang");
+      if (saved && S[saved]) return saved;
+    } catch { /* no storage */ }
+    const locale = (navigator.language || "en").toLowerCase();
+    return locale.startsWith("ru") ? "ru" : locale.startsWith("es") ? "es" : "en";
+  };
+  let lang = pick();
+
+  window.i18n = {
+    get lang() { return lang; },
+    t(key, ...args) {
+      const v = S[lang][key] ?? S.en[key] ?? key;
+      return typeof v === "function" ? v(...args) : v;
+    },
+    set(l) {
+      if (!S[l]) return;
+      lang = l;
+      try { localStorage.setItem("qil.lang", l); } catch { /* no storage */ }
+      this.apply();
+    },
+    apply(root = document) {
+      document.documentElement.lang = lang;
+      root.querySelectorAll("[data-i18n]").forEach((el) => { el.textContent = this.t(el.dataset.i18n); });
+      root.querySelectorAll("[data-i18n-html]").forEach((el) => { el.innerHTML = this.t(el.dataset.i18nHtml); });
+      root.querySelectorAll("[data-i18n-ph]").forEach((el) => { el.placeholder = this.t(el.dataset.i18nPh); });
+      root.querySelectorAll("[data-i18n-aria]").forEach((el) => { el.setAttribute("aria-label", this.t(el.dataset.i18nAria)); });
+      document.querySelectorAll("[data-lang]").forEach((b) => {
+        b.setAttribute("aria-current", String(b.dataset.lang === lang));
+      });
+      window.dispatchEvent(new Event("langchange"));
+    },
+  };
+})();

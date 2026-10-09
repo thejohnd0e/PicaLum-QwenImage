@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PicaLum QwenImage</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+<strong>PicaLum QwenImage</strong>
+      <span class="mono">qwen-image-2.1 · <span id="profileTag">int8</span></span>
+    </div>
+    <div class="status">
+      <div class="stat" id="engineStat" hidden>
+        <span class="dot" id="engineDot"></span><span id="engineTxt"></span>
+      </div>
+      <div class="stat" id="gpuStat">
+        <span id="gpuName" class="mono">GPU</span>
+        <span class="meter"><span class="meter-fill" id="vramFill"></span></span>
+        <span class="mono" id="vramTxt">— / — GB</span>
+      </div>
+      <button class="btn btn-sm" id="engineBtn" type="button" hidden></button>
+      <button class="btn btn-sm" id="folderBtn" type="button" data-i18n="openFolder" hidden></button>
+      <button class="settings-toggle" id="settingsBtn" type="button" aria-label="Settings" data-i18n-aria="settingsTitle" hidden>
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-1.7 1.7-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V20h-2.4v-.2a1.7 1.7 0 0 0-1.03-1.56 1.7 1.7 0 0 0-1.88.34l-.06.06-1.7-1.7.06-.06A1.7 1.7 0 0 0 8.4 15a1.7 1.7 0 0 0-1.56-1.03H6v-2.4h.84A1.7 1.7 0 0 0 8.4 10a1.7 1.7 0 0 0-.34-1.88L8 8.06l1.7-1.7.06.06a1.7 1.7 0 0 0 1.88.34 1.7 1.7 0 0 0 1.03-1.56V5h2.4v.2a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06 1.7 1.7-.06.06A1.7 1.7 0 0 0 19.4 10a1.7 1.7 0 0 0 1.56 1.03h.04v2.4h-.04A1.7 1.7 0 0 0 19.4 15Z"></path></svg>
+      </button>
+      <div class="lang">
+        <button class="lang-toggle" id="langToggle" type="button" aria-label="Change language" aria-expanded="false" aria-controls="languageMenu">
+          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"></path></svg>
+        </button>
+        <div class="lang-menu" id="languageMenu" role="menu" hidden>
+          <button type="button" role="menuitem" data-lang="en">English</button>
+          <button type="button" role="menuitem" data-lang="ru">Русский</button>
+          <button type="button" role="menuitem" data-lang="es">Español</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="settings-backdrop" id="settingsBackdrop" hidden>
+    <section class="settings-dialog" id="settingsDialog" role="dialog" aria-modal="true" aria-labelledby="settingsHeading" tabindex="-1">
+      <h2 id="settingsHeading" data-i18n="settingsTitle"></h2>
+      <div class="settings-group">
+        <span class="label" data-i18n="outputFolder"></span>
+        <div class="pathrow">
+          <span class="mono path" id="settingsPath" dir="auto"></span>
+          <button type="button" class="btn btn-sm" id="outputPick" data-i18n="change"></button>
+        </div>
+      </div>
+      <label class="check settings-check"><input type="checkbox" id="saveJson"> <span data-i18n="jsonSidecars"></span></label>
+      <p class="hint" data-i18n="embeddedPngNote"></p>
+      <p class="settings-error" id="settingsError" role="alert" hidden></p>
+      <div class="settings-actions">
+        <button type="button" class="btn" id="settingsCancel" data-i18n="cancel"></button>
+        <button type="button" class="btn btn-primary" id="settingsSave" data-i18n="save"></button>
+      </div>
+    </section>
+  </div>
+
+  <!-- ── First run ── -->
+  <section class="setup" id="setupView" hidden>
+    <div class="setup-inner">
+      <div class="setup-head">
+        <h1 data-i18n="setupTitle"></h1>
+        <p class="muted" data-i18n="setupLead"></p>
+      </div>
+
+      <div class="problems" id="problems" hidden></div>
+
+      <div class="setup-grid">
+        <div class="setup-col">
+          <div class="group">
+            <span class="label" data-i18n="yourGpu"></span>
+            <div class="gpu-card" id="gpuCard"></div>
+          </div>
+
+          <div class="group">
+            <span class="label" data-i18n="vramProfile"></span>
+            <div class="presets" id="profiles" role="radiogroup">
+              <button type="button" role="radio" data-profile="balanced" aria-checked="true">
+                <span class="p-name"><span data-i18n="profBalanced"></span> <span class="rec" data-rec="balanced" data-i18n="recommended" hidden></span></span>
+                <span class="p-meta mono" data-i18n="profBalancedMeta"></span>
+              </button>
+              <button type="button" role="radio" data-profile="compact" aria-checked="false">
+                <span class="p-name"><span data-i18n="profCompact"></span> <span class="rec" data-rec="compact" data-i18n="recommended" hidden></span></span>
+                <span class="p-meta mono" data-i18n="profCompactMeta"></span>
+              </button>
+            </div>
+          </div>
+
+          <div class="group">
+            <span class="label" data-i18n="modelsFolder"></span>
+            <div class="pathrow">
+              <span class="mono path" id="modelsDir"></span>
+              <button type="button" class="btn btn-sm" id="modelsPick" data-i18n="change"></button>
+            </div>
+            <p class="hint" data-i18n="modelsHint"></p>
+          </div>
+
+          <div class="summary mono" id="summary"></div>
+        </div>
+
+        <div class="setup-col">
+          <div class="group grow">
+            <span class="label" data-i18n="whatInstalls"></span>
+            <div class="steps" id="steps"></div>
+            <details class="log" id="logBox">
+              <summary data-i18n="details"></summary>
+              <pre id="log"></pre>
+            </details>
+          </div>
+        </div>
+      </div>
+
+      <div class="setup-foot">
+        <p class="hint" data-i18n="licenseNote"></p>
+        <button type="button" class="btn btn-primary btn-wide" id="installBtn"></button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Main ── -->
+  <div class="app" id="mainView" hidden>
+    <aside class="panel">
+      <div class="panel-scroll">
+        <section class="group">
+          <div class="seg seg-3" role="tablist">
+            <button type="button" role="tab" data-mode="text" aria-selected="true" data-i18n="modeText"></button>
+            <button type="button" role="tab" data-mode="photos" aria-selected="false" data-i18n="modePhotos"></button>
+            <button type="button" role="tab" data-mode="surprise" aria-selected="false" data-i18n="modeSurprise"></button>
+          </div>
+          <p class="hint" id="modeHint"></p>
+        </section>
+
+        <section class="group" data-show="text">
+          <label class="label" for="promptText" data-i18n="description"></label>
+          <textarea id="promptText" rows="7" spellcheck="false" data-i18n-ph="descPh"></textarea>
+          <label class="check"><input type="checkbox" id="transparent"> <span data-i18n="transparent"></span> <span class="mono muted">PNG + alpha</span></label>
+        </section>
+
+        <section class="group" data-show="photos" hidden>
+          <div class="label-row">
+            <span class="label" data-i18n="references"></span>
+            <span class="mono muted" id="refCount">0 / 10</span>
+          </div>
+          <div class="refs" id="refs"></div>
+          <p class="hint" data-i18n-html="refsHint"></p>
+          <label class="label" for="promptPhotos" data-i18n="instruction"></label>
+          <textarea id="promptPhotos" rows="5" spellcheck="false" data-i18n-ph="instrPh"></textarea>
+          <div class="quick" id="quick"></div>
+        </section>
+
+        <section class="group" data-show="surprise" hidden>
+          <label class="label" for="theme"><span data-i18n="theme"></span> <span class="muted" data-i18n="optional"></span></label>
+          <input id="theme" type="text" spellcheck="false" data-i18n-ph="themePh">
+          <p class="hint" data-i18n="surpriseHint"></p>
+          <div class="idea" id="idea" hidden>
+            <div class="label-row"><span class="label" data-i18n="lastIdea"></span><button type="button" class="btn btn-xs" id="ideaToText" data-i18n="editAsText"></button></div>
+            <p id="ideaTxt"></p>
+          </div>
+        </section>
+
+        <section class="group">
+          <span class="label" data-i18n="quality"></span>
+          <div class="presets" id="presets" role="radiogroup">
+            <button type="button" role="radio" data-preset="draft" aria-checked="false">
+              <span class="p-name" data-i18n="pDraft"></span><span class="p-meta mono" data-t="1024² · 20 · ~35 s" data-e="1024 px · 20 · ~50 s"></span>
+            </button>
+            <button type="button" role="radio" data-preset="standard" aria-checked="true">
+              <span class="p-name" data-i18n="pStandard"></span><span class="p-meta mono" data-t="1.6 MP · 30 · ~1.5 min" data-e="1280 px · 30 · ~2.5 min"></span>
+            </button>
+            <button type="button" role="radio" data-preset="max" aria-checked="false">
+              <span class="p-name" data-i18n="pMax"></span><span class="p-meta mono" data-t="2K · 40 · ~7 min" data-e="1536 px · 40 · ~5 min"></span>
+            </button>
+          </div>
+          <p class="hint mono" data-i18n="presetLegend"></p>
+        </section>
+
+        <section class="group" data-show="text surprise">
+          <span class="label" data-i18n="format"></span>
+          <div class="aspects" id="aspects">
+            <button type="button" data-ar="random" class="ar-random" data-only="surprise" data-i18n="random"></button>
+            <button type="button" data-ar="1:1"><i style="--w:14px;--h:14px"></i>1:1</button>
+            <button type="button" data-ar="4:3"><i style="--w:16px;--h:12px"></i>4:3</button>
+            <button type="button" data-ar="3:4"><i style="--w:12px;--h:16px"></i>3:4</button>
+            <button type="button" data-ar="3:2"><i style="--w:18px;--h:12px"></i>3:2</button>
+            <button type="button" data-ar="2:3"><i style="--w:12px;--h:18px"></i>2:3</button>
+            <button type="button" data-ar="16:9"><i style="--w:20px;--h:11px"></i>16:9</button>
+            <button type="button" data-ar="9:16"><i style="--w:11px;--h:20px"></i>9:16</button>
+          </div>
+        </section>
+
+        <section class="group">
+          <div class="label-row">
+            <label class="label" for="seed" data-i18n="seed"></label>
+            <label class="check check-sm"><input type="checkbox" id="seedLock"> <span data-i18n="lock"></span></label>
+          </div>
+          <input id="seed" type="text" inputmode="numeric" class="mono" data-i18n-ph="seedPh" disabled>
+        </section>
+      </div>
+
+      <div class="panel-foot">
+        <div class="gen-split">
+          <button type="button" class="btn btn-primary gen-main" id="genBtn" disabled></button>
+          <button type="button" class="btn btn-primary gen-menu-toggle" id="genMenuBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="genMenu" disabled>
+            <span class="chevron" aria-hidden="true"></span>
+          </button>
+          <div class="gen-menu" id="genMenu" role="menu" hidden>
+            <button type="button" class="gen-menu-item" id="genForeverBtn" role="menuitem" data-i18n="generateForever"></button>
+          </div>
+        </div>
+        <button type="button" class="btn btn-block" id="cancelBtn" data-i18n="cancel" hidden></button>
+        <p class="kbd mono" data-i18n="kbd"></p>
+      </div>
+    </aside>
+
+    <main class="stage">
+      <div class="progress" id="progress"><div class="progress-fill" id="progressFill"></div></div>
+      <div class="viewer" id="viewer">
+        <div class="empty" id="empty">
+          <p class="empty-title" data-i18n="emptyTitle"></p>
+          <p class="muted"><span data-i18n="emptyText"></span> <span class="mono" id="outDirTxt"></span></p>
+        </div>
+        <img id="shot" alt="" hidden>
+        <div class="working" id="working" hidden>
+          <p class="w-stage" id="wStage"></p>
+          <p class="w-step mono" id="wStep"></p>
+        </div>
+      </div>
+      <div class="notice" id="notice" hidden><span id="noticeTxt"></span><button type="button" class="btn btn-xs" id="noticeClose" data-i18n="close"></button></div>
+      <div class="info" id="info" hidden>
+        <div class="info-text">
+          <p class="info-prompt" id="infoPrompt"></p>
+          <p class="info-meta mono" id="infoMeta"></p>
+        </div>
+        <div class="info-actions">
+          <button type="button" class="btn btn-sm" id="aCopy" data-i18n="copyPrompt"></button>
+          <button type="button" class="btn btn-sm" id="aSeed" data-i18n="useSeed"></button>
+          <button type="button" class="btn btn-sm" id="aEdit" data-i18n="editThis"></button>
+          <button type="button" class="btn btn-sm" id="aReveal" data-i18n="showInFolder"></button>
+          <button type="button" class="btn btn-sm" id="aOpen" data-i18n="open"></button>
+        </div>
+      </div>
+      <div class="history">
+        <div class="history-head"><span class="label" data-i18n="history"></span><span class="mono muted" id="histCount">0</span><button type="button" class="btn btn-xs history-clear" id="clearHistoryBtn" data-i18n="clearHistory" disabled></button></div>
+        <div class="history-strip" id="history"></div>
+      </div>
+    </main>
+  </div>
+
+  <div class="dropveil" id="dropveil" hidden><p data-i18n="dropHere"></p></div>
+
+  <script src="i18n.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Test core and CLI
+        run: cargo test -p qil-core -p qil-cli
+      - name: Clippy
+        run: cargo clippy -p qil-core -p qil-cli -- -D warnings
+      - name: Check UI scripts
+        run: |
+          node --check app/ui/app.js
+          node --check app/ui/i18n.js

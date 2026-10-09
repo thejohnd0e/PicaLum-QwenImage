@@ -1,0 +1,5 @@
+[
+  {"id": "t2i_draft", "mode": "t2i", "ar": "1:1", "prompt": "A red fox curled up asleep in fresh snow at dawn, soft pink light, 85mm, shallow depth of field."},
+  {"id": "t2i_standard_16x9", "mode": "t2i", "ar": "16:9", "prompt": "Landscape photograph of Mount Fitz Roy at sunrise, pink alpenglow, still turquoise lake with a mirror reflection."},
+  {"id": "edit_snow", "mode": "edit", "images": ["calle_ba.jpg"], "prompt": "Change the scene to a snowy winter night with warm lights in the windows. Keep the buildings, signs, people and composition exactly the same."}
+]

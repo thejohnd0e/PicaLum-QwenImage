@@ -1,0 +1,33 @@
+MIT License
+
+Copyright (c) 2026 thejohnd0e
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---------------------------------------------------------------------------
+This license covers the code in this repository only. It does not cover:
+
+- The Qwen-Image-2.1 model weights, which the app downloads from Hugging Face
+  and which are licensed by Alibaba under the Qwen Research License
+  (non-commercial): https://huggingface.co/Qwen/Qwen-Image-2.1/blob/main/LICENSE
+- ComfyUI (GPL-3.0), which the app downloads at install time and runs as a
+  separate process.
+- The benchmark input photos in bench/inputs, whose authors and licenses are
+  listed in bench/inputs/credits.json. Edits derived from CC BY-SA photos are
+  released under CC BY-SA 4.0.

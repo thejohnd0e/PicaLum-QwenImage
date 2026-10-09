@@ -1,0 +1,26 @@
+[package]
+name = "qil-core"
+description = "Runtime, installer and generation client for Qwen-Image-2.1 on small GPUs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+crc32fast = "1"
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "blocking", "rustls-tls"] }
+tokio-tungstenite = "0.26"
+futures-util = "0.3"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp", "bmp"] }
+rand = "0.8"
+chrono = "0.4"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+sha2 = "0.10"
+hex = "0.4"
+dirs = "5"
+fs4 = { version = "0.13", features = ["sync"] }
+
+[target.'cfg(windows)'.dependencies]
+win32job = "2"

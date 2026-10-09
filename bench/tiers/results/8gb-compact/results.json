@@ -1,0 +1,44 @@
+{
+  "edit_snow": {
+    "baselineVramMb": 1010,
+    "gpu": "RTX 3060",
+    "height": 1120,
+    "peakVramMb": 9678,
+    "preset": "standard",
+    "profile": "compact",
+    "sampleSeconds": 119.8,
+    "seconds": 141.1,
+    "secondsPerStep": 3.99,
+    "seed": 20260923,
+    "steps": 30,
+    "width": 1472
+  },
+  "t2i_draft": {
+    "baselineVramMb": 1010,
+    "gpu": "RTX 3060",
+    "height": 1024,
+    "peakVramMb": 9064,
+    "preset": "draft",
+    "profile": "compact",
+    "sampleSeconds": 27.5,
+    "seconds": 33.3,
+    "secondsPerStep": 1.37,
+    "seed": 20260923,
+    "steps": 20,
+    "width": 1024
+  },
+  "t2i_standard_16x9": {
+    "baselineVramMb": 1010,
+    "gpu": "RTX 3060",
+    "height": 960,
+    "peakVramMb": 9054,
+    "preset": "standard",
+    "profile": "compact",
+    "sampleSeconds": 76.1,
+    "seconds": 81.9,
+    "secondsPerStep": 2.54,
+    "seed": 20260923,
+    "steps": 30,
+    "width": 1696
+  }
+}

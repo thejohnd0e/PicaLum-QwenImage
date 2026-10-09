@@ -1,0 +1,102 @@
+{
+  "F1_retrato_pescador": {
+    "seconds": 447.7,
+    "seed": 20260923,
+    "file": "F1_retrato_pescador.png"
+  },
+  "F2_calle_lluvia": {
+    "seconds": 444.7,
+    "seed": 20260923,
+    "file": "F2_calle_lluvia.png"
+  },
+  "F3_comida_medialunas": {
+    "seconds": 444.7,
+    "seed": 20260923,
+    "file": "F3_comida_medialunas.png"
+  },
+  "F4_manos_luthier": {
+    "seconds": 441.7,
+    "seed": 20260923,
+    "file": "F4_manos_luthier.png"
+  },
+  "F5_paisaje_fitzroy": {
+    "seconds": 431.8,
+    "seed": 20260923,
+    "file": "F5_paisaje_fitzroy.png"
+  },
+  "F6_producto_reloj": {
+    "seconds": 420.8,
+    "seed": 20260923,
+    "file": "F6_producto_reloj.png"
+  },
+  "C1_faro_libros": {
+    "seconds": 446.7,
+    "seed": 20260923,
+    "file": "C1_faro_libros.png"
+  },
+  "C2_poster_mardelplata": {
+    "seconds": 442.7,
+    "seed": 20260923,
+    "file": "C2_poster_mardelplata.png"
+  },
+  "C3_infografia_mate": {
+    "seconds": 423.7,
+    "seed": 20260923,
+    "file": "C3_infografia_mate.png"
+  },
+  "C4_carpincho_astronauta": {
+    "seconds": 431.7,
+    "seed": 20260923,
+    "file": "C4_carpincho_astronauta.png"
+  },
+  "C5_conteo_frutas": {
+    "seconds": 420.8,
+    "seed": 20260923,
+    "file": "C5_conteo_frutas.png"
+  },
+  "C6_sticker_rgba": {
+    "seconds": 422.7,
+    "seed": 20260923,
+    "file": "C6_sticker_rgba.png"
+  },
+  "E1_calle_nieve": {
+    "seconds": 303.6,
+    "seed": 20260923,
+    "file": "E1_calle_nieve.png"
+  },
+  "E2_retrato_ropa": {
+    "seconds": 296.5,
+    "seed": 20260923,
+    "file": "E2_retrato_ropa.png"
+  },
+  "E3_cartel_texto": {
+    "seconds": 302.5,
+    "seed": 20260923,
+    "file": "E3_cartel_texto.png"
+  },
+  "E4_cafe_sin_gente": {
+    "seconds": 295.5,
+    "seed": 20260923,
+    "file": "E4_cafe_sin_gente.png"
+  },
+  "E5_perro_acuarela": {
+    "seconds": 291.5,
+    "seed": 20260923,
+    "file": "E5_perro_acuarela.png"
+  },
+  "E6_multi_bici_perro": {
+    "seconds": 429.7,
+    "seed": 20260923,
+    "file": "E6_multi_bici_perro.png"
+  },
+  "E7_bici_recorte": {
+    "seconds": 299.5,
+    "seed": 20260923,
+    "file": "E7_bici_recorte.png"
+  },
+  "E8_pared_quitar": {
+    "seconds": 304.7,
+    "seed": 20260923,
+    "file": "E8_pared_quitar.png"
+  }
+}

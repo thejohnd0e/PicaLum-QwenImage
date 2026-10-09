@@ -9,6 +9,7 @@ pub mod engine;
 pub mod generate;
 pub mod gpu;
 mod png_metadata;
+pub mod run_control;
 pub mod setup;
 pub mod surprise;
 

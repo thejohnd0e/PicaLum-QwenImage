@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::RwLock;
+use std::sync::{Mutex, RwLock};
+use std::time::Duration;
 
 use base64::Engine as _;
 use qil_core::{
@@ -22,7 +23,21 @@ impl Drop for Flag {
     }
 }
 
-struct Settings(RwLock<Config>);
+struct Settings {
+    config: RwLock<Config>,
+    active_generation: Mutex<Option<tokio::sync::watch::Sender<bool>>>,
+}
+
+struct ActiveGenerationGuard<'a>(&'a Settings);
+
+impl Drop for ActiveGenerationGuard<'_> {
+    fn drop(&mut self) {
+        match self.0.active_generation.lock() {
+            Ok(mut active) => *active = None,
+            Err(poisoned) => *poisoned.into_inner() = None,
+        }
+    }
+}
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -51,7 +66,7 @@ fn validated_output_dir(path: &str) -> Result<PathBuf, String> {
 }
 
 fn cfg(s: &State<'_, Settings>) -> Config {
-    s.0.read().unwrap().clone()
+    s.config.read().unwrap().clone()
 }
 
 // ── Setup ──
@@ -93,7 +108,7 @@ fn setup_configure(
     profile: Profile,
     models_dir: Option<String>,
 ) -> Result<Config, String> {
-    let mut c = settings.0.write().unwrap();
+    let mut c = settings.config.write().unwrap();
     c.profile = profile;
     if let Some(d) = models_dir.filter(|d| !d.trim().is_empty()) {
         c.models_dir = PathBuf::from(d);
@@ -156,7 +171,7 @@ fn save_app_settings(
     let output_dir = validated_output_dir(&output_dir)?;
     std::fs::create_dir_all(&output_dir)
         .map_err(|e| format!("Cannot create output folder: {e}"))?;
-    let mut current = settings.0.write().unwrap();
+    let mut current = settings.config.write().unwrap();
     if BUSY.load(Ordering::SeqCst) {
         return Err("Settings cannot be changed while generation is running.".into());
     }
@@ -220,11 +235,19 @@ async fn generate(
     app: AppHandle,
     settings: State<'_, Settings>,
     req: GenRequest,
+    remaining_ms: Option<u64>,
 ) -> Result<GenResult, String> {
     if BUSY.swap(true, Ordering::SeqCst) {
         return Err("A generation is already running.".into());
     }
     let _flag = Flag(&BUSY);
+    let (cancel_tx, cancel_rx) = tokio::sync::watch::channel(false);
+    *settings
+        .active_generation
+        .lock()
+        .map_err(|_| "Generation cancellation state is unavailable.".to_string())? =
+        Some(cancel_tx);
+    let _active = ActiveGenerationGuard(&settings);
     let c = cfg(&settings);
     if !engine::is_up(&c).await {
         return Err("The engine is off.".into());
@@ -232,12 +255,45 @@ async fn generate(
     let emit = move |p: qil_core::Progress| {
         let _ = app.emit("gen-progress", p);
     };
-    generate::run(&c, req, c.output_dir.clone(), &emit).await
+    let now = tokio::time::Instant::now();
+    let request_deadline = now + Duration::from_secs(30 * 60);
+    let deadline = remaining_ms
+        .map(|remaining| now + Duration::from_millis(remaining).min(Duration::from_secs(30 * 60)))
+        .map_or(request_deadline, |batch_deadline| {
+            request_deadline.min(batch_deadline)
+        });
+    let options = generate::GenerateOptions {
+        config: &c,
+        output_dir: c.output_dir.clone(),
+        control: qil_core::run_control::RunControl::new(cancel_rx, deadline),
+        on_progress: &emit,
+    };
+    generate::run_with_control(req, options)
+        .await
+        .map_err(|error| match error {
+            qil_core::run_control::RunError::Cancelled => "Cancelled".to_string(),
+            qil_core::run_control::RunError::TimedOut => {
+                format!("Generation timed out; see {}", c.engine_log().display())
+            }
+            qil_core::run_control::RunError::CancellationUnconfirmed => "Cancelled; the engine may still be finishing and the next request may queue behind it.".to_string(),
+            qil_core::run_control::RunError::TimeoutUnconfirmed => format!(
+                "Generation timed out; the engine may still be finishing. See {}",
+                c.engine_log().display()
+            ),
+            qil_core::run_control::RunError::Request(message) => message,
+        })
 }
 
 #[tauri::command]
 async fn cancel(settings: State<'_, Settings>) -> Result<(), String> {
-    generate::interrupt(&cfg(&settings)).await;
+    let active = settings
+        .active_generation
+        .lock()
+        .map_err(|_| "Generation cancellation state is unavailable.".to_string())?
+        .clone();
+    if let Some(cancel) = active {
+        cancel.send_replace(true);
+    }
     Ok(())
 }
 
@@ -406,10 +462,19 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .manage(Engine::default())
-        .manage(Settings(RwLock::new(Config::load())))
+        .manage(Settings {
+            config: RwLock::new(Config::load()),
+            active_generation: Mutex::new(None),
+        })
         .setup(|app| {
             // Let the UI show images from the output folder through asset://
-            let out = app.state::<Settings>().0.read().unwrap().output_dir.clone();
+            let out = app
+                .state::<Settings>()
+                .config
+                .read()
+                .unwrap()
+                .output_dir
+                .clone();
             let _ = std::fs::create_dir_all(&out);
             let _ = app.asset_protocol_scope().allow_directory(&out, true);
             Ok(())

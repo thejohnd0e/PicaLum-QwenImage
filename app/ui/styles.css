@@ -111,7 +111,7 @@ code { font-family: var(--font-mono); font-size: 11px; background: var(--sunken)
 .btn:hover:not(:disabled) { background: var(--hover); border-color: var(--border-strong); }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .btn:focus-visible, .seg button:focus-visible, .presets button:focus-visible, .aspects button:focus-visible,
-textarea:focus-visible, input:focus-visible, .ref:focus-visible, .hist:focus-visible {
+textarea:focus-visible, input:focus-visible, select:focus-visible, .ref:focus-visible, .hist:focus-visible {
   outline: 2px solid var(--text); outline-offset: 1px;
 }
 .btn-sm { height: 26px; padding: 0 10px; font-size: 12px; }
@@ -135,9 +135,9 @@ textarea:focus-visible, input:focus-visible, .ref:focus-visible, .hist:focus-vis
 .batch-running p { text-align: center; }
 
 /* ── Distribución ── */
-.app { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 360px; }
+.app { flex: 1; min-height: 0; display: grid; grid-template-columns: 360px minmax(0, 1fr); }
 
-.panel { grid-column: 2; grid-row: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; background: var(--panel); border-left: 1px solid var(--border); }
+.panel { grid-column: 1; grid-row: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; background: var(--panel); border-right: 1px solid var(--border); }
 .panel-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 22px 22px 10px; display: flex; flex-direction: column; gap: 19px; }
 .panel-foot { flex-shrink: 0; padding: 14px 22px 16px; border-top: 1px solid var(--border); display: grid; gap: 8px; }
 .kbd { color: var(--text-faint); font-size: 10.5px; text-align: center; }
@@ -238,13 +238,19 @@ input.mono { font-family: var(--font-mono); font-size: 12px; }
 .refs.empty { grid-template-columns: 1fr; }
 .refs.empty .ref-add { aspect-ratio: auto; height: 108px; }
 
-.quick { display: flex; flex-wrap: wrap; gap: 4px; }
+.prompt-preset-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; align-items: center; }
+.prompt-preset-select {
+  width: 100%; min-width: 0; height: 30px; padding: 0 8px;
+  border: 1px solid var(--border); border-radius: var(--r); background: var(--panel);
+  color: var(--text); font: 12px var(--font-sans);
+}
+.prompt-preset-select:disabled { color: var(--text-faint); opacity: .65; }
 
 .idea { border: 1px solid var(--border); border-radius: var(--r); padding: 10px; display: grid; gap: 6px; background: var(--sunken); }
 .idea p { font-size: 12px; color: var(--text-muted); max-height: 120px; overflow-y: auto; }
 
 /* ── Escenario ── */
-.stage { grid-column: 1; grid-row: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; position: relative; }
+.stage { grid-column: 2; grid-row: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; position: relative; }
 .progress { height: 2px; flex-shrink: 0; background: transparent; }
 .progress.visible { background: var(--border); }
 .progress-fill { height: 100%; width: 0; background: var(--text); transition: width 0.3s ease; }
@@ -379,6 +385,27 @@ input.mono { font-family: var(--font-mono); font-size: 12px; }
 .settings-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
 .settings-dialog :focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
 
+.prompt-presets-backdrop { overflow-y: auto; }
+.prompt-presets-dialog { width: 760px; max-height: calc(100vh - 32px); display: flex; flex-direction: column; overflow: hidden; }
+.prompt-presets-dialog h2 { flex-shrink: 0; }
+.prompt-presets-layout { display: grid; grid-template-columns: minmax(180px, 0.8fr) minmax(0, 1.2fr); gap: 16px; min-height: 0; }
+.prompt-presets-list-wrap { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.prompt-presets-list { min-height: 100px; max-height: 330px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--r); }
+.prompt-preset-item { width: 100%; min-width: 0; padding: 8px 10px; border: 0; border-bottom: 1px solid var(--border); background: var(--panel); color: var(--text); font: 12px var(--font-sans); text-align: left; overflow-wrap: anywhere; cursor: pointer; }
+.prompt-preset-item:last-child { border-bottom: 0; }
+.prompt-preset-item:hover:not(:disabled) { background: var(--hover); }
+.prompt-preset-item[aria-pressed="true"] { background: var(--sunken); }
+.prompt-preset-item:focus-visible { outline: 2px solid var(--text); outline-offset: -2px; }
+.prompt-presets-list-actions { display: flex; flex-wrap: wrap; gap: 4px; }
+.prompt-presets-fields { min-width: 0; display: grid; align-content: start; gap: 6px; }
+.prompt-presets-fields textarea { min-height: 140px; max-height: 45vh; resize: vertical; }
+.prompt-presets-fields input, .prompt-presets-fields textarea { user-select: text; }
+.prompt-presets-from-current { justify-self: start; }
+.prompt-presets-dialog .settings-error { margin-top: 12px; overflow-wrap: anywhere; }
+.prompt-presets-retry { align-self: start; margin-top: 8px; }
+.prompt-presets-dialog .settings-actions { flex-shrink: 0; margin-top: 14px; }
+.prompt-presets-dialog :focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+
 /* ── First-run setup ── */
 .setup { flex: 1; min-height: 0; overflow-y: auto; background: var(--bg); }
 .setup-inner { max-width: 1040px; margin: 0 auto; padding: 32px 32px 28px; display: flex; flex-direction: column; gap: 22px; min-height: 100%; }
@@ -412,7 +439,7 @@ input.mono { font-family: var(--font-mono); font-size: 12px; }
 .btn-wide { height: 38px; min-width: 220px; font-size: 13px; }
 @media (max-width: 1040px) {
   .setup-grid { grid-template-columns: 1fr; }
-  .app { grid-template-columns: minmax(0, 1fr) 320px; }
+  .app { grid-template-columns: 320px minmax(0, 1fr); }
   .panel-scroll { padding: 18px 16px 8px; }
   .panel-foot { padding: 12px 16px 14px; }
   .topbar { gap: 12px; padding: 0 12px; }
@@ -428,7 +455,7 @@ input.mono { font-family: var(--font-mono); font-size: 12px; }
   .stat + .stat { padding-left: 6px; }
 }
 @media (max-width: 680px) {
-  .app { grid-template-columns: minmax(0, 1fr) 280px; }
+  .app { grid-template-columns: 280px minmax(0, 1fr); }
   .brand-model { display: none; }
   .topbar { gap: 4px; padding: 0 6px; }
   .status { gap: 4px; }
@@ -437,4 +464,8 @@ input.mono { font-family: var(--font-mono); font-size: 12px; }
   .mode-nav button { font-size: 11.5px; }
   .compare-panes { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
   .viewer.has-compare { padding: 52px 12px 12px; }
+  .prompt-presets-dialog { padding: 16px; }
+  .prompt-presets-layout { grid-template-columns: minmax(0, 1fr); gap: 12px; overflow-y: auto; }
+  .prompt-presets-list { max-height: 150px; }
+  .prompt-presets-list-actions .btn { flex: 1 1 auto; }
 }

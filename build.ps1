@@ -10,6 +10,14 @@ param([switch]$Installer)
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 
+$workspaceVersionMatch = [regex]::Match((Get-Content -LiteralPath "Cargo.toml" -Raw), '(?m)^version\s*=\s*"([^"]+)"')
+if (-not $workspaceVersionMatch.Success) { throw "Could not read the workspace package version from Cargo.toml." }
+$workspaceVersion = $workspaceVersionMatch.Groups[1].Value
+$tauriVersion = (Get-Content -LiteralPath "app\src-tauri\tauri.conf.json" -Raw | ConvertFrom-Json).version
+if ($workspaceVersion -ne $tauriVersion) {
+    throw "Cargo version $workspaceVersion does not match Tauri bundle version $tauriVersion; the app header and installer filename would disagree."
+}
+
 function Need($cmd, $why, $install) {
     if (-not (Get-Command $cmd -ErrorAction SilentlyContinue)) {
         Write-Host "Missing: $cmd ($why)" -ForegroundColor Red
@@ -32,6 +40,7 @@ if (-not $vc) {
     exit 1
 }
 Write-Host "  cargo $((cargo --version) -replace 'cargo ',''), node $(node --version), MSVC ok"
+Write-Host "  version $workspaceVersion (app and installer)"
 
 Write-Host "`nBuilding the qil CLI..." -ForegroundColor Cyan
 cargo build --release -p qil-cli
@@ -47,10 +56,23 @@ Pop-Location
 if ($code) { exit $code }
 
 New-Item -ItemType Directory -Force out | Out-Null
-Copy-Item target\release\picalum-qwenimage.exe out\ -Force
+$appSource = "target\release\picalum-qwenimage.exe"
+$appDestination = "out\picalum-qwenimage.exe"
+try {
+    Copy-Item -LiteralPath $appSource -Destination $appDestination -Force -ErrorAction Stop
+} catch {
+    $appDestination = "out\picalum-qwenimage_$workspaceVersion.exe"
+    Copy-Item -LiteralPath $appSource -Destination $appDestination -Force
+    Write-Host "  The standard app path is in use; saved the updated binary as $appDestination" -ForegroundColor Yellow
+}
 Copy-Item target\release\qil.exe out\ -Force
-if ($Installer) { Copy-Item "target\release\bundle\nsis\*.exe" out\ -Force }
+if ($Installer) {
+    $installerName = "PicaLum QwenImage_${workspaceVersion}_x64-setup.exe"
+    $installerPath = Join-Path "target\release\bundle\nsis" $installerName
+    if (-not (Test-Path -LiteralPath $installerPath)) { throw "Expected versioned installer was not produced: $installerPath" }
+    Copy-Item -LiteralPath $installerPath -Destination out\ -Force
+}
 
 Write-Host "`nDone." -ForegroundColor Green
 Get-ChildItem out | ForEach-Object { "  {0,-45} {1,6:N1} MB" -f $_.Name, ($_.Length / 1MB) }
-Write-Host "`nRun .\out\picalum-qwenimage.exe. The first launch installs the engine and downloads the weights (~19.5 GB, once)."
+Write-Host "`nRun .\$appDestination. The first launch installs the engine and downloads the weights (~19.5 GB, once)."

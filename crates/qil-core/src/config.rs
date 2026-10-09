@@ -6,7 +6,7 @@
 
 use std::path::{Path, PathBuf};
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 pub const APP_ID: &str = "picalum-qwenimage";
 pub const CURRENT_CONFIG_VERSION: u32 = 1;
@@ -90,7 +90,7 @@ impl Profile {
     }
     /// Pick a profile from total VRAM in MB.
     pub fn for_vram(total_mb: u32) -> Profile {
-        if total_mb >= 11_000 {
+        if total_mb >= 12_000 {
             Profile::Balanced
         } else {
             Profile::Compact
@@ -105,6 +105,93 @@ impl Profile {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum ProfileMode {
+    #[default]
+    Auto,
+    Manual,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GpuSelection {
+    pub uuid: Option<String>,
+    #[serde(default)]
+    pub profile_mode: ProfileMode,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum VerificationStatus {
+    Passed,
+    Skipped,
+    Failed,
+}
+
+pub const MAX_VERIFICATION_MESSAGE_CHARS: usize = 500;
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GpuVerification {
+    pub gpu_uuid: String,
+    pub profile: Profile,
+    pub engine_fingerprint: String,
+    pub status: VerificationStatus,
+    pub checked_at: String,
+    pub seconds: Option<f64>,
+    pub peak_vram_mb: Option<u32>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_verification_message",
+        serialize_with = "serialize_verification_message"
+    )]
+    pub message: Option<String>,
+}
+
+impl GpuVerification {
+    pub fn matches_context(
+        &self,
+        gpu_uuid: &str,
+        profile: Profile,
+        engine_fingerprint: &str,
+    ) -> bool {
+        self.gpu_uuid == gpu_uuid
+            && self.profile == profile
+            && self.engine_fingerprint == engine_fingerprint
+    }
+}
+
+fn serialize_verification_message<S>(
+    message: &Option<String>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    match message.as_deref().and_then(bounded_verification_message) {
+        Some(message) => serializer.serialize_some(&message),
+        None => serializer.serialize_none(),
+    }
+}
+
+fn deserialize_verification_message<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Option::<String>::deserialize(deserializer)
+        .map(|message| message.as_deref().and_then(bounded_verification_message))
+}
+
+fn bounded_verification_message(message: &str) -> Option<String> {
+    let normalized = message.split_whitespace().collect::<Vec<_>>().join(" ");
+    let bounded: String = normalized
+        .chars()
+        .take(MAX_VERIFICATION_MESSAGE_CHARS)
+        .collect();
+    (!bounded.is_empty()).then_some(bounded)
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Config {
@@ -112,6 +199,10 @@ pub struct Config {
     pub models_dir: PathBuf,
     #[serde(default)]
     pub profile: Profile,
+    #[serde(default)]
+    pub gpu_selection: GpuSelection,
+    #[serde(default)]
+    pub gpu_verification: Option<GpuVerification>,
     /// Where generated images go.
     pub output_dir: PathBuf,
     #[serde(default = "default_save_json")]
@@ -156,6 +247,8 @@ impl Default for Config {
             models_dir: runtime_dir.join("models"),
             runtime_dir: runtime_dir.clone(),
             profile: Profile::default(),
+            gpu_selection: GpuSelection::default(),
+            gpu_verification: None,
             output_dir: runtime_dir.join("ComfyUI").join("output"),
             save_json: default_save_json(),
             config_version: CURRENT_CONFIG_VERSION,
@@ -188,7 +281,10 @@ impl Config {
     }
 
     pub fn save(&self) -> std::io::Result<()> {
-        let p = config_path();
+        self.save_to_path(&config_path())
+    }
+
+    fn save_to_path(&self, p: &Path) -> std::io::Result<()> {
         if let Some(dir) = p.parent() {
             std::fs::create_dir_all(dir)?;
         }
@@ -252,9 +348,9 @@ mod tests {
 
     #[test]
     fn profile_by_vram() {
-        assert_eq!(Profile::for_vram(12_288), Profile::Balanced);
-        assert_eq!(Profile::for_vram(24_576), Profile::Balanced);
-        assert_eq!(Profile::for_vram(8_192), Profile::Compact);
+        assert_eq!(Profile::for_vram(10_000), Profile::Compact);
+        assert_eq!(Profile::for_vram(11_999), Profile::Compact);
+        assert_eq!(Profile::for_vram(12_000), Profile::Balanced);
     }
 
     #[test]
@@ -296,5 +392,139 @@ mod tests {
         assert!(migrate_config(&mut custom, &legacy));
         assert_eq!(custom.output_dir, custom_path);
         assert_eq!(custom.config_version, CURRENT_CONFIG_VERSION);
+    }
+
+    #[test]
+    fn legacy_config_json_defaults_gpu_selection_and_verification() {
+        let legacy_json = r#"{
+            "runtimeDir": "C:/runtime",
+            "modelsDir": "C:/models",
+            "profile": "compact",
+            "outputDir": "C:/output",
+            "saveJson": false,
+            "configVersion": 1,
+            "port": 9000
+        }"#;
+
+        let config: Config = serde_json::from_str(legacy_json).unwrap();
+
+        assert_eq!(config.gpu_selection.uuid, None);
+        assert_eq!(config.gpu_selection.profile_mode, ProfileMode::Auto);
+        assert_eq!(config.gpu_verification, None);
+    }
+
+    #[test]
+    fn auto_gpu_selection_round_trips() {
+        let mut config = Config::default();
+        config.gpu_selection = GpuSelection {
+            uuid: Some("GPU-aaaaaaaa".to_string()),
+            profile_mode: ProfileMode::Auto,
+        };
+
+        let restored: Config =
+            serde_json::from_str(&serde_json::to_string(&config).unwrap()).unwrap();
+
+        assert_eq!(restored.gpu_selection.uuid.as_deref(), Some("GPU-aaaaaaaa"));
+        assert_eq!(restored.gpu_selection.profile_mode, ProfileMode::Auto);
+    }
+
+    #[test]
+    fn manual_gpu_selection_round_trips() {
+        let mut config = Config::default();
+        config.gpu_selection = GpuSelection {
+            uuid: Some("GPU-bbbbbbbb".to_string()),
+            profile_mode: ProfileMode::Manual,
+        };
+
+        let restored: Config =
+            serde_json::from_str(&serde_json::to_string(&config).unwrap()).unwrap();
+
+        assert_eq!(restored.gpu_selection.uuid.as_deref(), Some("GPU-bbbbbbbb"));
+        assert_eq!(restored.gpu_selection.profile_mode, ProfileMode::Manual);
+    }
+
+    #[test]
+    fn verification_state_round_trips() {
+        let verification = GpuVerification {
+            gpu_uuid: "GPU-aaaaaaaa".to_string(),
+            profile: Profile::Balanced,
+            engine_fingerprint: "comfy-3b4c0b0e".to_string(),
+            status: VerificationStatus::Passed,
+            checked_at: "2026-10-09T12:00:00Z".to_string(),
+            seconds: Some(31.5),
+            peak_vram_mb: Some(11_400),
+            message: Some("Draft verification passed.".to_string()),
+        };
+        let mut config = Config::default();
+        config.gpu_verification = Some(verification.clone());
+
+        let restored: Config =
+            serde_json::from_str(&serde_json::to_string(&config).unwrap()).unwrap();
+
+        assert_eq!(restored.gpu_verification, Some(verification));
+    }
+
+    #[test]
+    fn verification_matches_only_the_current_gpu_profile_and_engine() {
+        let verification = GpuVerification {
+            gpu_uuid: "GPU-aaaaaaaa".to_string(),
+            profile: Profile::Balanced,
+            engine_fingerprint: "comfy-3b4c0b0e".to_string(),
+            status: VerificationStatus::Passed,
+            checked_at: "2026-10-09T12:00:00Z".to_string(),
+            seconds: None,
+            peak_vram_mb: None,
+            message: None,
+        };
+
+        assert!(verification.matches_context("GPU-aaaaaaaa", Profile::Balanced, "comfy-3b4c0b0e"));
+        assert!(!verification.matches_context("GPU-bbbbbbbb", Profile::Balanced, "comfy-3b4c0b0e"));
+        assert!(!verification.matches_context("GPU-aaaaaaaa", Profile::Compact, "comfy-3b4c0b0e"));
+        assert!(!verification.matches_context("GPU-aaaaaaaa", Profile::Balanced, "comfy-other"));
+    }
+
+    #[test]
+    fn verification_message_serialization_is_bounded_and_single_line() {
+        let mut config = Config::default();
+        config.gpu_verification = Some(GpuVerification {
+            gpu_uuid: "GPU-aaaaaaaa".to_string(),
+            profile: Profile::Balanced,
+            engine_fingerprint: "comfy-3b4c0b0e".to_string(),
+            status: VerificationStatus::Failed,
+            checked_at: "2026-10-09T12:00:00Z".to_string(),
+            seconds: None,
+            peak_vram_mb: None,
+            message: Some(format!(
+                "CUDA failed:\n{}",
+                "x".repeat(MAX_VERIFICATION_MESSAGE_CHARS + 1)
+            )),
+        });
+
+        let serialized = serde_json::to_value(&config).unwrap();
+        let message = serialized["gpuVerification"]["message"].as_str().unwrap();
+
+        assert!(message.len() <= MAX_VERIFICATION_MESSAGE_CHARS);
+        assert!(!message.contains('\n'));
+    }
+
+    #[test]
+    fn failed_config_save_leaves_in_memory_state_unchanged() {
+        let config = Config::default();
+        let before = serde_json::to_value(&config).unwrap();
+        let blocking_path = std::env::temp_dir().join(format!(
+            "qil-config-save-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::write(&blocking_path, "config").unwrap();
+
+        let result = config.save_to_path(&blocking_path.join("config.json"));
+
+        assert!(result.is_err());
+        assert_eq!(serde_json::to_value(&config).unwrap(), before);
+        std::fs::remove_file(blocking_path).unwrap();
     }
 }

@@ -1,10 +1,24 @@
 # Changelog
 
+## 0.1.10 — 2026-10-09
+
+- GPU verification now starts after install or update: the setup status exposes the engine fingerprint (the UI previously never matched a saved result), and a failed or interrupted run is no longer remembered as started, so it is retried on the next launch.
+
+## 0.1.9 — 2026-10-09
+
+- GPU verification card: styled as a centered overlay that no longer collides with the empty-state text, Retry/Cancel/Continue buttons now have labels, and a failure shows the actual error message.
+
+## 0.1.8 — 2026-10-09
+
+- Setup: GPU architecture is now proven by the bundled PyTorch (selected UUID, runtime UUID match, compiled architecture list) before any model weights are planned or downloaded; new GPU capability check step with pending, proven and rejected states in the desktop app and `qil doctor`.
+
 ## 0.1.7 — 2026-10-09
 
 - Edit mode: manage reusable prompt presets saved locally in the runtime directory; the tool panel is now on the left.
 - Create prompt field: remove the visible Description label while preserving its accessible name.
 - Desktop app and NSIS installer: use the supplied app icon.
+- CLI: `doctor` enumerates NVIDIA GPUs, stable selection, VRAM recommendations, transient free VRAM, and verification freshness; `setup --gpu-uuid` prevents silent multi-GPU selection.
+- Windows NVIDIA policy: 10 GB minimum; Compact at 10–<12 GB and Balanced at 12 GB+, with automatic desktop Draft verification and explicit Skip.
 
 ## 0.1.3 — 2026-10-09
 

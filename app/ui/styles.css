@@ -298,6 +298,17 @@ input.mono { font-family: var(--font-mono); font-size: 12px; }
 .empty { text-align: center; max-width: 380px; display: grid; gap: 6px; }
 .empty-title { font-size: 15px; font-weight: 600; }
 
+.verification-card {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 2;
+  display: grid; gap: 8px; width: min(420px, calc(100% - 32px)); text-align: center;
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--r);
+  padding: 16px 20px; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.1);
+}
+.verification-card[hidden] { display: none; }
+.verification-card .hint { white-space: pre-wrap; overflow-wrap: anywhere; }
+.verification-actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+.viewer:has(.verification-card:not([hidden])) .empty { visibility: hidden; }
+
 .working {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
   background: var(--panel); border: 1px solid var(--border); border-radius: var(--r);
@@ -469,3 +480,4 @@ input.mono { font-family: var(--font-mono); font-size: 12px; }
   .prompt-presets-list { max-height: 150px; }
   .prompt-presets-list-actions .btn { flex: 1 1 auto; }
 }
+.gpu-list { display: grid; gap: 6px; } .gpu-card { width: 100%; text-align: left; color: var(--text); font: inherit; } .gpu-card.selected { border-color: var(--border-strong); background: var(--sunken); } .profile-mode { display: flex; gap: 14px; margin-bottom: 8px; font-size: 12px; }

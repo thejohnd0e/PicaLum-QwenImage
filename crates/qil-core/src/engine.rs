@@ -5,6 +5,7 @@
 //! process exits (even on a crash), so VRAM is always released.
 
 use std::fs::File;
+use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 use std::time::Duration;
@@ -118,6 +119,23 @@ impl Engine {
         if let Ok(extra) = std::env::var("QIL_ENGINE_ARGS") {
             cmd.args(extra.split_whitespace()); // e.g. "--reserve-vram 4" to emulate a smaller card
         }
+        apply_selected_gpu_env(&mut cmd, cfg)?;
+        let runtime_uuid =
+            probe_runtime_gpu_uuid(&cfg.python(), cfg.gpu_selection.uuid.as_deref())?;
+        match check_runtime_gpu_identity(
+            cfg.gpu_selection.uuid.as_deref().unwrap_or_default(),
+            Some(&runtime_uuid),
+        ) {
+            GpuIdentityCheck::Match => {}
+            GpuIdentityCheck::Mismatch => {
+                return Err(format!(
+                    "Selected GPU identity mismatch: runtime reported {runtime_uuid}."
+                ))
+            }
+            GpuIdentityCheck::NotFound | GpuIdentityCheck::Unverified => {
+                return Err("Selected GPU identity could not be verified by PyTorch.".into())
+            }
+        }
         let child = no_window(&mut cmd)
             .spawn()
             .map_err(|e| format!("Could not launch the engine: {e}"))?;
@@ -169,5 +187,196 @@ impl Engine {
 impl Drop for Engine {
     fn drop(&mut self) {
         self.stop();
+    }
+}
+
+/// Applies selected GPU binding only to the ComfyUI child command.
+pub fn apply_selected_gpu_env(cmd: &mut Command, cfg: &Config) -> Result<(), String> {
+    let uuid = cfg
+        .gpu_selection
+        .uuid
+        .as_deref()
+        .ok_or("No selected GPU UUID is configured.")?;
+    if uuid.trim().is_empty() {
+        return Err("Selected GPU UUID is empty.".into());
+    }
+    cmd.env("CUDA_VISIBLE_DEVICES", uuid);
+    Ok(())
+}
+
+#[cfg(test)]
+mod task4_tests {
+    use super::apply_selected_gpu_env;
+    use crate::Config;
+    use std::process::Command;
+
+    #[test]
+    fn selected_uuid_is_bound_only_on_child_command() {
+        let mut cfg = Config::default();
+        cfg.gpu_selection.uuid = Some("GPU-test-uuid".into());
+        let mut command = Command::new("python");
+        apply_selected_gpu_env(&mut command, &cfg).unwrap();
+        assert_eq!(
+            command
+                .get_envs()
+                .find(|(key, _)| *key == "CUDA_VISIBLE_DEVICES")
+                .and_then(|(_, value)| value)
+                .and_then(|v| v.to_str()),
+            Some("GPU-test-uuid")
+        );
+    }
+
+    #[test]
+    fn missing_selected_uuid_is_explicit() {
+        let mut command = Command::new("python");
+        assert!(apply_selected_gpu_env(&mut command, &Config::default()).is_err());
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GpuIdentityCheck {
+    Match,
+    Mismatch,
+    NotFound,
+    Unverified,
+}
+
+/// Classifies a runtime-reported UUID without inferring identity from model names or ordinals.
+pub fn check_runtime_gpu_identity(expected: &str, runtime_uuid: Option<&str>) -> GpuIdentityCheck {
+    let Some(runtime_uuid) = runtime_uuid else {
+        return GpuIdentityCheck::Unverified;
+    };
+    if runtime_uuid.trim().is_empty() {
+        return GpuIdentityCheck::NotFound;
+    }
+    let Some(expected) = normalize_torch_gpu_uuid(expected) else {
+        return GpuIdentityCheck::Mismatch;
+    };
+    let Some(runtime_uuid) = normalize_torch_gpu_uuid(runtime_uuid) else {
+        return GpuIdentityCheck::NotFound;
+    };
+    if runtime_uuid.eq_ignore_ascii_case(&expected) {
+        GpuIdentityCheck::Match
+    } else {
+        GpuIdentityCheck::Mismatch
+    }
+}
+
+#[cfg(test)]
+mod identity_tests {
+    use super::{check_runtime_gpu_identity, GpuIdentityCheck};
+
+    #[test]
+    fn accepts_matching_runtime_uuid() {
+        assert_eq!(
+            check_runtime_gpu_identity("GPU-a", Some("GPU-a")),
+            GpuIdentityCheck::Match
+        );
+    }
+    #[test]
+    fn accepts_mixed_case_normalized_uuid() {
+        assert_eq!(
+            check_runtime_gpu_identity("gpu-{ABCDEF-01}", Some("GPU-abcdef-01")),
+            GpuIdentityCheck::Match
+        );
+    }
+    #[test]
+    fn rejects_mismatched_runtime_uuid() {
+        assert_eq!(
+            check_runtime_gpu_identity("GPU-a", Some("GPU-b")),
+            GpuIdentityCheck::Mismatch
+        );
+    }
+    #[test]
+    fn distinguishes_not_found_and_unverified() {
+        assert_eq!(
+            check_runtime_gpu_identity("GPU-a", Some("")),
+            GpuIdentityCheck::NotFound
+        );
+        assert_eq!(
+            check_runtime_gpu_identity("GPU-a", None),
+            GpuIdentityCheck::Unverified
+        );
+    }
+}
+
+pub fn normalize_torch_gpu_uuid(raw: &str) -> Option<String> {
+    let value = raw.trim().trim_matches(['"', '\'']);
+    // Some torch builds print the bare UUID without NVIDIA's `GPU-` prefix.
+    let bare = value.len() == 36
+        && value.char_indices().all(|(i, c)| match i {
+            8 | 13 | 18 | 23 => c == '-',
+            _ => c.is_ascii_hexdigit(),
+        });
+    let value = if bare {
+        value
+    } else {
+        value
+            .strip_prefix("GPU-")
+            .or_else(|| value.strip_prefix("gpu-"))?
+    };
+    let compact = value
+        .replace(['{', '}', ' ', '\\'], "")
+        .to_ascii_lowercase();
+    if compact.is_empty() || !compact.chars().all(|c| c.is_ascii_hexdigit() || c == '-') {
+        return None;
+    }
+    Some(format!("GPU-{compact}"))
+}
+
+pub fn probe_runtime_gpu_uuid(
+    python: &Path,
+    selected_uuid: Option<&str>,
+) -> Result<String, String> {
+    let selected = selected_uuid.ok_or("No selected GPU UUID is configured.")?;
+    let mut cmd = Command::new(python);
+    cmd.args([
+        "-c",
+        "import torch; p=torch.cuda.get_device_properties(0); print(p.uuid)",
+    ])
+    .env("CUDA_VISIBLE_DEVICES", selected)
+    .stdout(Stdio::piped())
+    .stderr(Stdio::piped());
+    let output = no_window(&mut cmd)
+        .output()
+        .map_err(|e| format!("Could not run PyTorch GPU identity probe: {e}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "PyTorch GPU identity probe failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .rev()
+        .find_map(normalize_torch_gpu_uuid)
+        .ok_or_else(|| "PyTorch did not report a GPU UUID.".into())
+}
+
+#[cfg(test)]
+mod torch_uuid_tests {
+    use super::normalize_torch_gpu_uuid;
+    #[test]
+    fn normalizes_torch_uuid_format() {
+        assert_eq!(
+            normalize_torch_gpu_uuid("GPU-{ABCDEF-01}"),
+            Some("GPU-abcdef-01".into())
+        );
+    }
+    #[test]
+    fn accepts_bare_uuid_without_gpu_prefix() {
+        assert_eq!(
+            normalize_torch_gpu_uuid("ABCDEF01-2345-6789-abcd-ef0123456789"),
+            Some("GPU-abcdef01-2345-6789-abcd-ef0123456789".into())
+        );
+        assert_eq!(
+            normalize_torch_gpu_uuid("abcdef01-2345-6789-abcd-ef012345678"),
+            None
+        );
+    }
+    #[test]
+    fn rejects_missing_or_malformed_uuid() {
+        assert_eq!(normalize_torch_gpu_uuid(""), None);
+        assert_eq!(normalize_torch_gpu_uuid("RTX-3060"), None);
     }
 }

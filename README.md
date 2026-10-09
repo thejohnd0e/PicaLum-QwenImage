@@ -178,6 +178,12 @@ Download `PicaLum QwenImage_x.y.z_x64-setup.exe` from [Releases](https://github.
 
 Either way, everything lives in `%LOCALAPPDATA%\picalum-qwenimage` (models can go on another disk), and uninstalling is deleting that folder.
 
+## GPU support and first-run verification
+
+Windows NVIDIA is required. The minimum is 10,000 MB total VRAM; 10,000–11,999 MB selects Compact and 12,000 MB or more selects Balanced. `qil setup --profile ...` is a manual profile choice and never overrides the 10 GB floor or unsupported-hardware checks. On multi-GPU systems, pass `--gpu-uuid` with the stable UUID shown by `qil doctor`; the CLI does not silently choose a different card.
+
+After desktop installation, the app runs one automatic Draft generation check for the selected GPU/profile/runtime. Skip waits for cancellation to be confirmed and persisted. `qil doctor` reports all detected GPUs, the selected UUID and profile recommendation, transient free VRAM, and whether the stored verification is fresh. Verification confirms this installed runtime context only; it is not a benchmark and does not prove performance or future driver compatibility.
+
 ## Quick start (CLI)
 
 `qil.exe` comes out of the same build (or the release zip) and uses the same install as the app.

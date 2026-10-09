@@ -62,6 +62,7 @@
       </div>
       <label class="check settings-check"><input type="checkbox" id="saveJson"> <span data-i18n="jsonSidecars"></span></label>
       <p class="hint" data-i18n="embeddedPngNote"></p>
+      <button type="button" class="btn btn-sm" id="settingsVerificationRetry" data-i18n="verificationRetry"></button>
       <p class="settings-error" id="settingsError" role="alert" hidden></p>
       <div class="settings-actions">
         <button type="button" class="btn" id="settingsCancel" data-i18n="cancel"></button>
@@ -113,12 +114,13 @@
         <div class="setup-col">
           <div class="group">
             <span class="label" data-i18n="yourGpu"></span>
-            <div class="gpu-card" id="gpuCard"></div>
+            <div class="gpu-list" id="gpuCard"></div>
           </div>
 
           <div class="group">
             <span class="label" data-i18n="vramProfile"></span>
-            <div class="presets" id="profiles" role="radiogroup">
+            <div class="profile-mode"><label><input type="radio" name="profileMode" value="auto" checked> <span data-i18n="profileAuto"></span></label><label><input type="radio" name="profileMode" value="manual"> <span data-i18n="profileManual"></span></label></div>
+             <div class="presets" id="profiles" role="radiogroup">
               <button type="button" role="radio" data-profile="balanced" aria-checked="true">
                 <span class="p-name"><span data-i18n="profBalanced"></span> <span class="rec" data-rec="balanced" data-i18n="recommended" hidden></span></span>
                 <span class="p-meta mono" data-i18n="profBalancedMeta"></span>
@@ -310,7 +312,13 @@
           <p class="w-stage" id="wStage"></p>
           <p class="w-step mono" id="wStep"></p>
         </div>
-      </div>
+
+        <section class="verification-card" id="verificationCard" hidden aria-live="polite">
+          <p class="label" id="verificationTitle"></p>
+          <p class="hint" id="verificationDetail"></p>
+          <div class="progress verification-progress"><div class="progress-fill" id="verificationFill"></div></div>
+          <div class="verification-actions"><button type="button" class="btn btn-primary" id="verificationContinue" hidden></button><button type="button" class="btn" id="verificationRetry" hidden></button><button type="button" class="btn" id="verificationCancel" hidden></button></div>
+        </section>      </div>
       <div class="notice" id="notice" hidden><span id="noticeTxt"></span><button type="button" class="btn btn-xs" id="noticeClose" data-i18n="close"></button></div>
       <div class="info" id="info" hidden>
         <div class="info-text">
@@ -339,6 +347,7 @@
   <script src="prompt-presets.js"></script>
   <script src="viewer.js"></script>
   <script src="viewer-controller.js"></script>
+  <script src="verification-controller.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

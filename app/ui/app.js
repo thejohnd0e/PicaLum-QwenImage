@@ -37,6 +37,7 @@
     setup: null, // SetupInfo from Rust
     installing: false,
     stepState: {}, // id -> {state, detail, done, total, bps}
+    verification: { state: "idle", progress: 0, key: "", canceling: false },
   };
   const comparison = window.QilComparison.create({ state, getElement: $, fileSrc, translate: t });
   const promptPresets = window.QilPromptPresets.create({
@@ -56,10 +57,18 @@
   function localSet(k, v) { try { localStorage.setItem("qil." + k, v); } catch { /* no storage */ } }
   const fmtBytes = (b) => (b >= 1073741824 ? (b / 1073741824).toFixed(1) + " GB" : Math.round(b / 1048576) + " MB");
   const fmtSecs = (s) => (s >= 60 ? `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, "0")} s` : `${s} s`);
+  const verification = QilVerification({ invoke, listen, storage: { get: (k) => localGet("verification.started", ""), set: (k, v) => localSet("verification.started", v) }, key: () => verificationKey(), canStart: () => !state.busy, onState: (next) => { state.verification = next; renderVerification(); updateGenButton(); } });
 
   // ═════════ Setup (first run) ═════════
 
-  const STEP_LABEL = { uv: "stepUv", comfy: "stepComfy", python: "stepPython", deps: "stepDeps" };
+  const STEP_LABEL = { uv: "stepUv", comfy: "stepComfy", python: "stepPython", deps: "stepDeps", gpucheck: "stepGpuCheck" };
+  const reasonName = (r) => (typeof r === "string" ? r : r ? Object.keys(r)[0] : "");
+  const eligibilityText = (e) => {
+    const r = e.kind === "unsupportedGpu" ? reasonName(e.reason) : "";
+    if (r === "unknownCapability") return t("capabilityUnknown");
+    if (r === "incompatibleCapability") return t("capabilityRejected");
+    return e.message || t("gpuUnsupported");
+  };
 
   async function loadSetup() {
     state.setup = await invoke("setup_status");
@@ -71,22 +80,24 @@
     const s = state.setup;
     if (!s) return;
     const g = s.status.gpu;
-    $("gpuCard").innerHTML = g
-      ? `<strong>${g.name.replace("NVIDIA GeForce ", "")}</strong><span class="mono">${(g.totalMb / 1024).toFixed(1)} GB VRAM · ${t("driver")} ${g.driver}</span>`
-      : `<strong>${t("noGpu")}</strong>`;
-    const probs = s.status.problems;
+    const devices = s.status.gpus || [];
+    $("gpuCard").innerHTML = devices.length ? devices.map((d) => { const x=d.gpu; const selected=x.uuid===s.status.selectedUuid; return `<button type="button" class="gpu-card${selected ? " selected" : ""}" data-gpu="${escapeHtml(x.uuid)}"><strong>${escapeHtml(x.name.replace("NVIDIA GeForce ", ""))}</strong><span class="mono">${(x.totalMb / 1024).toFixed(1)} GB VRAM · ${t("driver")} ${x.driver}</span></button>`; }).join("") : `<strong>${t("noGpu")}</strong>`;
+    document.querySelectorAll("[data-gpu]").forEach((b) => b.addEventListener("click", async () => { try { await invoke("setup_configure", { profile: s.config.profile, modelsDir: null, selectedUuid: b.dataset.gpu, profileMode: s.config.gpuSelection?.profileMode || "auto" }); } catch (e) { notify(String(e)); } await loadSetup(); }));
+    const probs = [...(s.status.problems || [])];
+    if (s.status.eligibilityError) probs.push(eligibilityText(s.status.eligibilityError));
     $("problems").hidden = !probs.length;
     $("problems").innerHTML = probs.map((p) => `<p>${escapeHtml(p)}</p>`).join("");
 
     document.querySelectorAll("#profiles [data-profile]").forEach((b) =>
       b.setAttribute("aria-checked", String(b.dataset.profile === s.config.profile)));
     document.querySelectorAll("[data-rec]").forEach((el) => { el.hidden = el.dataset.rec !== s.recommended; });
+    document.querySelectorAll("[name=profileMode]").forEach((r) => { r.checked = r.value === (s.config.gpuSelection?.profileMode || "auto"); });
     $("modelsDir").textContent = s.config.modelsDir;
     $("modelsDir").title = s.config.modelsDir;
 
     const dl = s.status.downloadBytes;
     const free = s.status.freeBytes;
-    $("summary").textContent = (dl ? `${fmtBytes(dl)} ${t("toDownload")}` : t("nothingToDownload")) + (free != null ? ` · ${fmtBytes(free)} ${t("free")}` : "");
+    $("summary").textContent = (dl ? `${fmtBytes(dl)} ${t("toDownload")}` : t("nothingToDownload")) + (free != null ? ` · ${fmtBytes(free)} ${t("free")}` : "") + (s.status.capability?.state === "pending" && !s.status.eligibilityError ? ` · ${t("capabilityPending")}` : "");
 
     const steps = $("steps");
     steps.innerHTML = "";
@@ -112,7 +123,7 @@
       row.innerHTML = `<span class="dot ${cls}"></span><span class="s-name mono">${escapeHtml(name)}</span><span class="s-meta mono">${escapeHtml(meta)}</span><span class="s-bar"><i style="width:${pct}%"></i></span>`;
       steps.appendChild(row);
     }
-    const blocked = probs.some((p) => /NVIDIA|driver|disk|VRAM/i.test(p));
+    const blocked = Boolean(s.status.eligibilityError) || probs.some((p) => /NVIDIA|driver|disk|VRAM|unsupported|required/i.test(p));
     const btn = $("installBtn");
     if (state.installing) { btn.textContent = t("installing"); btn.disabled = true; }
     else if (s.status.ready) { btn.textContent = t("startApp"); btn.disabled = false; }
@@ -122,17 +133,18 @@
 
   document.querySelectorAll("#profiles [data-profile]").forEach((b) =>
     b.addEventListener("click", async () => {
-      await invoke("setup_configure", { profile: b.dataset.profile, modelsDir: null });
+      await invoke("setup_configure", { profile: b.dataset.profile, modelsDir: null, selectedUuid: state.setup.status.selectedUuid, profileMode: "manual" });
       loadSetup();
     }));
   $("modelsPick").addEventListener("click", async () => {
     const dir = await invoke("pick_folder");
     if (!dir) return;
-    await invoke("setup_configure", { profile: state.setup.config.profile, modelsDir: dir });
+    await invoke("setup_configure", { profile: state.setup.config.profile, modelsDir: dir, selectedUuid: state.setup.status.selectedUuid, profileMode: state.setup.config.gpuSelection?.profileMode || "auto" });
     loadSetup();
   });
+  document.querySelectorAll("[name=profileMode]").forEach((r) => r.addEventListener("change", async () => { await invoke("setup_configure", { profile: state.setup.config.profile, modelsDir: null, selectedUuid: state.setup.status.selectedUuid, profileMode: r.value }); await loadSetup(); }));
   $("installBtn").addEventListener("click", async () => {
-    if (state.setup?.status.ready) return enterApp();
+    if (state.setup?.status.ready) return enterReadyFlow();
     state.installing = true;
     state.failed = false;
     state.stepState = {};
@@ -176,12 +188,22 @@
       notifySetup(err);
     }
     await loadSetup();
+    if (!err && state.setup?.status.ready && state.setup.configured) await enterReadyFlow();
   }
   function notifySetup(msg) {
     $("problems").hidden = false;
     $("problems").insertAdjacentHTML("afterbegin", `<p>${escapeHtml(msg)}</p>`);
   }
   function escapeHtml(s) { return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]); }
+
+  function verificationKey() { const s=state.setup; return [s?.status?.selectedUuid||s?.config?.gpuSelection?.selectedUuid||"",s?.config?.profile||"",s?.status?.engineFingerprint||""].join("|"); }
+  function renderVerification() { const v=state.verification; const c=$("verificationCard"); if(!c)return; c.hidden=!( ["running","failed","success","skipped"].includes(v.state)); $("verificationTitle").textContent=t(v.state==="failed"?"verificationFailed":v.state==="success"?"verificationSuccess":v.state==="skipped"?"verificationSkipped":"verificationRunning"); $("verificationDetail").textContent=v.state==="failed"?t("verificationFailureHint")+(v.error?"\n"+String(v.error).replace(/^Error:\s*/,"").slice(0,400):""):(v.state==="success"||v.state==="skipped")?"":t("verificationProgress",v.progress); $("verificationFill").style.width=v.progress+"%"; $("verificationRetry").textContent=t("verificationRetry"); $("verificationCancel").textContent=t("verificationCancel"); $("verificationContinue").textContent=t("verificationContinue"); $("verificationRetry").hidden=v.state!=="failed"; $("verificationCancel").hidden=v.state!=="running"; $("verificationContinue").hidden=!(v.state==="success"||v.state==="skipped"); }
+  async function startVerification(force=false) { await verification.start(force); }
+  async function enterReadyFlow() { const record=await invoke("gpu_verification_status").catch(()=>null); const key=verificationKey(); const recordKey=record ? [record.gpuUuid,record.profile,record.engineFingerprint].join("|") : ""; if (record && recordKey===key && ["passed","failed","skipped"].includes(record.status)) { enterApp(); return; } beginVerificationPhase(); }
+  function beginVerificationPhase() { $("setupView").hidden=true; $("mainView").hidden=false; $("modeNav").hidden=true; ["engineStat","engineBtn","folderBtn","settingsBtn"].forEach((id)=>$(id).hidden=true); renderVerification(); refreshVerification(); }
+  function continueVerification() { verification.continue(); enterApp(); }
+  async function refreshVerification() { const existing=await invoke("gpu_verification_status").catch(()=>null); if(existing && ["passed","skipped","failed"].includes(existing.status)) verification.restore(existing); const key=verificationKey(); if(!key || localGet("verification.started","")===key) return; await verification.start(); }
+  $("verificationContinue").addEventListener("click",continueVerification); $("verificationRetry").addEventListener("click",()=>{startVerification(true);}); $("verificationCancel").addEventListener("click",()=>{verification.cancel();});
 
   // ═════════ Main app ═════════
 
@@ -309,7 +331,7 @@
     const btn = $("genBtn");
     let label = t("gen");
     let ok = true;
-    if (state.busy) { label = t("generating"); ok = false; }
+    if (state.busy || state.verification.state === "running") { label = t("generating"); ok = false; }
     else if (state.engine === "starting") { label = t("starting"); ok = false; }
     else if (state.engine !== "ready") { label = t("engineOffBtn"); ok = false; }
     else if (state.mode === "photos" && state.refs.length === 0) { label = t("needPhoto"); ok = false; }
@@ -326,7 +348,7 @@
     $("stopAfterCurrentBtn").hidden = !state.batch || state.batch.count === null || !state.batch.requestActive || state.batch.stopAfterCurrent;
     $("clearHistoryBtn").disabled = state.busy || state.history.length === 0;
     $("settingsBtn").disabled = state.busy;
-    const locked = state.busy;
+    const locked = state.busy || state.verification.state === "running";
     document.querySelectorAll("[data-mode], #promptText, #promptPhotos, #theme, #transparent, #seedLock, #seed, #presets [data-preset], #aspects [data-ar]").forEach((el) => { el.disabled = locked; });
     document.querySelectorAll(".ref-add, .ref .rot, .ref .x").forEach((el) => { el.disabled = locked; });
     promptPresets.setDisabled(locked);
@@ -385,7 +407,7 @@
 
   // Generate
   async function generate(count = 1) {
-    if ($("genBtn").disabled) return;
+    if ($("genBtn").disabled || state.verification.state === "running") return;
     setGenerateMenu(false);
     const snapshot = {
       mode: state.mode,
@@ -652,6 +674,7 @@
     $("settingsError").textContent = text;
     $("settingsError").hidden = false;
   }
+  $("settingsVerificationRetry").addEventListener("click", async () => { closeSettings(); localSet("verification.started",""); await startVerification(); });
   $("settingsBtn").addEventListener("click", openSettings);
   $("settingsCancel").addEventListener("click", closeSettings);
   $("settingsBackdrop").addEventListener("click", (event) => { if (event.target === $("settingsBackdrop")) closeSettings(); });
@@ -762,6 +785,7 @@
   async function wireEvents() {
     try {
       await listen("engine", (e) => renderEngine(e.payload));
+      await listen("gpu-verification-progress", (e) => verification.setProgress(Number(e.payload?.value||e.payload?.percent||0)));
       await listen("gen-progress", (e) => { if (state.busy) showWorking(e.payload.stage, e.payload.value, e.payload.max); });
       await listen("setup", (e) => onSetupEvent(e.payload));
       await listen("setup-finished", (e) => onSetupFinished(e.payload));
@@ -792,7 +816,7 @@
     pollGpu();
     setInterval(pollGpu, 2500);
     const s = await loadSetup().catch((e) => { notifySetup(String(e)); return null; });
-    if (s && s.status.ready && s.configured) enterApp();
+    if (s && s.status.ready && s.configured) enterReadyFlow();
     else $("setupView").hidden = false;
   })();
 })();

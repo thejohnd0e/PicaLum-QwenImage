@@ -6,8 +6,8 @@ use std::time::Duration;
 use base64::Engine as _;
 use qil_core::prompt_presets::PromptPresetFile;
 use qil_core::{
-    engine, generate, gpu, prompt_presets, setup, surprise, Config, Engine, EngineState,
-    GenRequest, GenResult, Profile,
+    engine, generate, gpu, prompt_presets, setup, surprise, verification, Config, Engine,
+    EngineState, GenRequest, GenResult, Profile,
 };
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, RunEvent, State};
@@ -27,6 +27,7 @@ impl Drop for Flag {
 struct Settings {
     config: RwLock<Config>,
     active_generation: Mutex<Option<tokio::sync::watch::Sender<bool>>>,
+    active_verification: Mutex<Option<tokio::sync::watch::Sender<bool>>>,
 }
 
 struct ActiveGenerationGuard<'a>(&'a Settings);
@@ -78,7 +79,7 @@ struct SetupInfo {
     status: setup::Status,
     config: Config,
     configured: bool,
-    recommended: Profile,
+    recommended: Option<Profile>,
 }
 
 #[tauri::command]
@@ -90,11 +91,7 @@ async fn setup_status(settings: State<'_, Settings>) -> Result<SetupInfo, String
     })
     .await
     .map_err(|e| e.to_string())?;
-    let recommended = status
-        .gpu
-        .as_ref()
-        .map(|g| Profile::for_vram(g.total_mb))
-        .unwrap_or_default();
+    let recommended = status.recommendation.as_ref().and_then(|r| r.profile);
     Ok(SetupInfo {
         status,
         config: c,
@@ -108,12 +105,28 @@ fn setup_configure(
     settings: State<'_, Settings>,
     profile: Profile,
     models_dir: Option<String>,
+    selected_uuid: Option<String>,
+    profile_mode: Option<qil_core::config::ProfileMode>,
 ) -> Result<Config, String> {
-    let mut c = settings.config.write().unwrap();
+    let mut c = cfg(&settings);
     c.profile = profile;
+    if let Some(uuid) = selected_uuid {
+        c.gpu_selection.uuid = Some(uuid);
+    }
+    if let Some(mode) = profile_mode {
+        c.gpu_selection.profile_mode = mode;
+    }
+    let gpus = gpu::detect_all().map_err(|e| e.to_string())?;
+    setup::resolve_prerequisites(&c, &gpus).map_err(|e| e.to_string())?;
+    c.save()
+        .map_err(|e| format!("Cannot save setup settings: {e}"))?;
     if let Some(d) = models_dir.filter(|d| !d.trim().is_empty()) {
         c.models_dir = PathBuf::from(d);
     }
+    *settings
+        .config
+        .write()
+        .map_err(|_| "Settings unavailable.".to_string())? = c.clone();
     Ok(c.clone())
 }
 
@@ -320,11 +333,13 @@ fn surprise_idea(theme: Option<String>) -> surprise::Idea {
 }
 
 #[tauri::command]
-async fn gpu_stats() -> Option<gpu::Gpu> {
-    tauri::async_runtime::spawn_blocking(gpu::detect)
-        .await
-        .ok()
-        .flatten()
+async fn gpu_stats(settings: State<'_, Settings>) -> Result<Option<gpu::Gpu>, String> {
+    let uuid = cfg(&settings).gpu_selection.uuid;
+    Ok(
+        tauri::async_runtime::spawn_blocking(move || gpu::detect_selected(uuid.as_deref()))
+            .await
+            .map_err(|e| e.to_string())?,
+    )
 }
 
 #[tauri::command]
@@ -487,6 +502,7 @@ pub fn run() {
         .manage(Settings {
             config: RwLock::new(Config::load()),
             active_generation: Mutex::new(None),
+            active_verification: Mutex::new(None),
         })
         .setup(|app| {
             // Let the UI show images from the output folder through asset://
@@ -515,6 +531,9 @@ pub fn run() {
             engine_stop,
             generate,
             cancel,
+            gpu_verification_start,
+            gpu_verification_cancel,
+            gpu_verification_status,
             surprise_idea,
             gpu_stats,
             app_version,
@@ -560,4 +579,139 @@ mod tests {
             PathBuf::from(r"D:\Art\Qwen")
         );
     }
+}
+
+#[tauri::command]
+async fn gpu_verification_start(
+    app: AppHandle,
+    engine: State<'_, Engine>,
+    settings: State<'_, Settings>,
+) -> Result<qil_core::GpuVerification, String> {
+    if BUSY.swap(true, Ordering::SeqCst) {
+        return Err("Generation or verification is already running.".into());
+    }
+    let _flag = Flag(&BUSY);
+    let c = cfg(&settings);
+    let uuid = c
+        .gpu_selection
+        .uuid
+        .clone()
+        .ok_or("No selected GPU UUID is configured.")?;
+    let run_id = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|e| e.to_string())?
+        .as_millis()
+        .to_string();
+    let output = verification::run_dir(&c.runtime_dir, &run_id);
+    std::fs::create_dir_all(&output).map_err(|e| e.to_string())?;
+    let (cancel_tx, cancel_rx) = tokio::sync::watch::channel(false);
+    *settings
+        .active_verification
+        .lock()
+        .map_err(|_| "Verification state unavailable.".to_string())? = Some(cancel_tx);
+    let started = tokio::time::Instant::now();
+    let startup = tokio::time::timeout(
+        Duration::from_secs(60),
+        engine.start(&c, &engine_emitter(&app)),
+    )
+    .await;
+    match startup {
+        Ok(Ok(())) => {}
+        Ok(Err(error)) => {
+            let _ = verification::cleanup_empty(&output);
+            return Err(format!("Verification engine could not start: {error}"));
+        }
+        Err(_) => {
+            engine.stop();
+            let _ = verification::cleanup_empty(&output);
+            return Err(
+                "Verification engine startup timed out; verification did not begin.".into(),
+            );
+        }
+    }
+    let peak = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+    let sampling = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
+    let sampler_peak = peak.clone();
+    let sampler_run = sampling.clone();
+    let sampler_uuid = uuid.clone();
+    let sampler = std::thread::spawn(move || {
+        while sampler_run.load(Ordering::Relaxed) {
+            if let Some(g) = gpu::detect_selected(Some(&sampler_uuid)) {
+                sampler_peak.fetch_max(g.used_mb, Ordering::Relaxed);
+            }
+            std::thread::sleep(Duration::from_millis(500));
+        }
+    });
+    let emit = move |p: qil_core::Progress| {
+        let _ = app.emit("gpu-verification-progress", p);
+    };
+    let remaining =
+        Duration::from_secs(verification::MAX_SECONDS).saturating_sub(started.elapsed());
+    let control =
+        qil_core::run_control::RunControl::new(cancel_rx, tokio::time::Instant::now() + remaining);
+    let options = generate::GenerateOptions {
+        config: &c,
+        output_dir: output.clone(),
+        control,
+        on_progress: &emit,
+    };
+    let result = generate::run_with_control(verification::request(), options).await;
+    sampling.store(false, Ordering::Relaxed);
+    let _ = sampler.join();
+    if let Ok(mut active) = settings.active_verification.lock() {
+        *active = None;
+    }
+    let cancelled = matches!(result, Err(qil_core::run_control::RunError::Cancelled));
+    let timed_out = matches!(
+        result,
+        Err(qil_core::run_control::RunError::TimedOut
+            | qil_core::run_control::RunError::TimeoutUnconfirmed)
+    );
+    let text = result.as_ref().err().map(|e| format!("{e:?}"));
+    let outcome = verification::classify(text.as_deref(), cancelled, timed_out);
+    let status = if outcome.class == verification::VerificationClass::Success {
+        qil_core::config::VerificationStatus::Passed
+    } else if outcome.class == verification::VerificationClass::Cancelled {
+        qil_core::config::VerificationStatus::Skipped
+    } else {
+        qil_core::config::VerificationStatus::Failed
+    };
+    let record = verification::record(
+        uuid,
+        c.profile,
+        status,
+        Some(started.elapsed().as_secs_f64()),
+        Some(peak.load(Ordering::Relaxed)),
+        text,
+    );
+    let mut updated = c.clone();
+    updated.gpu_verification = Some(record.clone());
+    updated.save().map_err(|e| e.to_string())?;
+    *settings
+        .config
+        .write()
+        .map_err(|_| "Settings unavailable.".to_string())? = updated;
+    verification::cleanup(&output, outcome.cleanup_safe).map_err(|e| e.to_string())?;
+    if timed_out && !outcome.cleanup_safe {
+        return Err("Verification timed out before cancellation was confirmed; temporary output was retained.".into());
+    }
+    Ok(record)
+}
+
+#[tauri::command]
+fn gpu_verification_cancel(settings: State<'_, Settings>) -> Result<(), String> {
+    if let Some(tx) = settings
+        .active_verification
+        .lock()
+        .map_err(|_| "Verification state unavailable.".to_string())?
+        .clone()
+    {
+        tx.send_replace(true);
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn gpu_verification_status(settings: State<'_, Settings>) -> Option<qil_core::GpuVerification> {
+    cfg(&settings).gpu_verification
 }

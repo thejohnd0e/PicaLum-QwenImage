@@ -7,6 +7,7 @@ use std::time::Duration;
 
 use clap::{Parser, Subcommand};
 use indicatif::{ProgressBar, ProgressStyle};
+use qil_core::config::ProfileMode;
 use qil_core::download::human_bytes;
 use qil_core::{config, generate, gpu, setup, surprise, Config, Engine, GenRequest, Profile};
 use serde_json::{json, Value};
@@ -35,6 +36,9 @@ enum Cmd {
         #[arg(long)]
         models_dir: Option<PathBuf>,
         #[arg(long)]
+        /// Stable NVIDIA UUID; required to disambiguate multiple eligible GPUs
+        #[arg(long)]
+        gpu_uuid: Option<String>,
         runtime_dir: Option<PathBuf>,
     },
     /// Generate an image from text
@@ -136,6 +140,7 @@ async fn run(cli: Cli) -> Result<(), String> {
             profile,
             models_dir,
             runtime_dir,
+            gpu_uuid,
         } => {
             if let Some(d) = runtime_dir {
                 cfg.runtime_dir = d;
@@ -144,12 +149,19 @@ async fn run(cli: Cli) -> Result<(), String> {
             if let Some(d) = models_dir {
                 cfg.models_dir = d;
             }
+            if let Some(uuid) = gpu_uuid {
+                cfg.gpu_selection.uuid = Some(uuid);
+            }
             cfg.profile = match profile {
-                Some(p) => Profile::parse(&p).ok_or("profile must be balanced or compact")?,
-                None => gpu::detect()
+                Some(p) => {
+                    cfg.gpu_selection.profile_mode = ProfileMode::Manual;
+                    Profile::parse(&p).ok_or("profile must be balanced or compact")?
+                }
+                None => gpu::detect_selected(cfg.gpu_selection.uuid.as_deref())
                     .map(|g| Profile::for_vram(g.total_mb))
                     .unwrap_or_default(),
             };
+            validate_cli_gpu_selection(&cfg)?;
             run_setup(cfg).await
         }
         Cmd::Generate {
@@ -261,33 +273,113 @@ fn select_output(cfg: &Config, explicit: Option<PathBuf>) -> PathBuf {
     explicit.unwrap_or_else(|| cfg.output_dir.clone())
 }
 
+fn support_reason(device: &setup::GpuSetupDevice) -> String {
+    match device.recommendation.reason {
+        Some(reason) => format!("rejected: {reason:?}"),
+        None => format!(
+            "supported: {}",
+            device
+                .recommendation
+                .profile
+                .map(Profile::label)
+                .unwrap_or("unknown")
+        ),
+    }
+}
+
+fn capability_line(state: &qil_core::capability::CapabilityState) -> String {
+    use qil_core::capability::CapabilityState::*;
+    match state {
+        Pending => "pending (verified with the bundled PyTorch during setup)".to_string(),
+        Proven { major, minor } => format!("proven {major}.{minor}"),
+        Rejected { major, minor } => {
+            format!("rejected {major}.{minor} (not compiled into the bundled PyTorch)")
+        }
+    }
+}
+
+fn inventory_line(device: &setup::GpuSetupDevice) -> String {
+    let g = &device.gpu;
+    format!(
+        "{} · UUID {} · total {} MB · used {} MB · free {} MB transient · {}",
+        g.short_name(),
+        g.uuid,
+        g.total_mb,
+        g.used_mb,
+        g.total_mb.saturating_sub(g.used_mb),
+        support_reason(device)
+    )
+}
+
 fn doctor(cfg: &Config) -> Result<(), String> {
     let st = setup::status(cfg);
-    match &st.gpu {
-        Some(g) => println!(
-            "GPU        {} · {:.1} GB VRAM · driver {} ({})",
-            g.short_name(),
-            g.total_mb as f64 / 1024.0,
-            g.driver,
-            if g.driver_major() >= config::MIN_DRIVER_MAJOR {
-                "ok"
-            } else {
-                "too old"
-            }
-        ),
-        None => println!("GPU        no NVIDIA GPU found"),
-    }
+    println!(
+        "GPU status {}",
+        if st.gpus.is_empty() {
+            "no NVIDIA GPU detected"
+        } else {
+            "NVIDIA GPU detected"
+        }
+    );
     println!(
         "profile    {} ({})",
         serde_json::to_value(cfg.profile).unwrap().as_str().unwrap(),
         cfg.profile.label()
     );
-    if let Some(g) = &st.gpu {
-        let rec = Profile::for_vram(g.total_mb);
-        if rec != cfg.profile {
-            println!("           recommended for your card: {}", rec.label());
-        }
+    for device in &st.gpus {
+        println!("{}", inventory_line(device));
     }
+    println!("capability {}", capability_line(&st.capability));
+    if let Some(error) = &st.eligibility_error {
+        println!("eligibility {error}");
+    }
+    let selected_uuid = cfg
+        .gpu_selection
+        .uuid
+        .as_deref()
+        .or(st.selected_uuid.as_deref())
+        .or_else(|| {
+            if st.gpus.len() == 1 {
+                st.gpus.first().map(|d| d.gpu.uuid.as_str())
+            } else {
+                None
+            }
+        });
+    println!("selected   UUID {}", selected_uuid.unwrap_or("none"));
+    let automatic = selected_uuid
+        .and_then(|uuid| st.gpus.iter().find(|d| d.gpu.uuid == uuid))
+        .and_then(|d| d.recommendation.profile);
+    println!(
+        "automatic  {}",
+        automatic
+            .map(|p| p.label())
+            .unwrap_or("unavailable (support rejected or capability unresolved)")
+    );
+    let verification = cfg
+        .gpu_verification
+        .as_ref()
+        .map(|v| {
+            format!(
+                "{:?}{}",
+                v.status,
+                if v.matches_context(
+                    cfg.gpu_selection
+                        .uuid
+                        .as_deref()
+                        .or(st.selected_uuid.as_deref())
+                        .or(st.gpu.as_ref().map(|g| g.uuid.as_str()))
+                        .unwrap_or(""),
+                    cfg.profile,
+                    &format!("comfy-{}", config::COMFY_COMMIT)
+                ) {
+                    " (fresh)"
+                } else {
+                    " (stale)"
+                }
+            )
+        })
+        .unwrap_or_else(|| "none".into());
+    println!("verification {verification}");
     println!("runtime    {}", cfg.runtime_dir.display());
     println!("models     {}", cfg.models_dir.display());
     println!("output     {}", cfg.output_dir.display());
@@ -320,18 +412,42 @@ fn doctor(cfg: &Config) -> Result<(), String> {
     Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn configured_output_is_default_and_explicit_destination_wins() {
-        let mut cfg = Config::default();
-        cfg.output_dir = PathBuf::from(r"D:\Art\Qwen");
-        assert_eq!(select_output(&cfg, None), cfg.output_dir);
-        let explicit = PathBuf::from(r"E:\one.png");
-        assert_eq!(select_output(&cfg, Some(explicit.clone())), explicit);
+fn validate_cli_gpu_selection(cfg: &Config) -> Result<(), String> {
+    let gpus = gpu::detect_all().map_err(|e| e.to_string())?;
+    if gpus.is_empty() {
+        return Err("No NVIDIA GPU detected.".into());
     }
+    if let Some(uuid) = cfg.gpu_selection.uuid.as_deref() {
+        let g = gpus
+            .iter()
+            .find(|g| g.uuid == uuid)
+            .ok_or_else(|| format!("selected GPU UUID {uuid} was not found"))?;
+        if g.total_mb < 10_000 {
+            return Err(format!(
+                "selected GPU {} has {} MB; 10,000 MB is required",
+                g.name, g.total_mb
+            ));
+        }
+        if g.driver_major() < config::MIN_DRIVER_MAJOR {
+            return Err(format!(
+                "selected GPU {} uses driver {}; {} or newer is required",
+                g.name,
+                g.driver_major(),
+                config::MIN_DRIVER_MAJOR
+            ));
+        }
+    } else {
+        let eligible = gpus
+            .iter()
+            .filter(|g| g.total_mb >= 10_000 && g.driver_major() >= config::MIN_DRIVER_MAJOR)
+            .count();
+        if eligible > 1 {
+            return Err(
+                "multiple eligible NVIDIA GPUs found; pass --gpu-uuid with a stable UUID".into(),
+            );
+        }
+    }
+    Ok(())
 }
 
 async fn run_setup(cfg: Config) -> Result<(), String> {
@@ -581,4 +697,69 @@ async fn bench(
         std::mem::forget(engine);
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn configured_output_is_default_and_explicit_destination_wins() {
+        let cfg = Config {
+            output_dir: PathBuf::from(r"D:\Art\Qwen"),
+            ..Config::default()
+        };
+        assert_eq!(select_output(&cfg, None), cfg.output_dir);
+        let explicit = PathBuf::from(r"E:\one.png");
+        assert_eq!(select_output(&cfg, Some(explicit.clone())), explicit);
+    }
+    #[test]
+    fn doctor_inventory_line_reports_transient_memory_and_unknown_capability() {
+        let gpu = qil_core::gpu::Gpu {
+            uuid: "GPU-fixture".into(),
+            pci_bus_id: "0000:01:00.0".into(),
+            name: "NVIDIA Fixture".into(),
+            total_mb: 12000,
+            used_mb: 3000,
+            util: 0,
+            driver: "610.0".into(),
+        };
+        let device = setup::GpuSetupDevice {
+            gpu,
+            recommendation: qil_core::gpu_profile::GpuRecommendation {
+                supported: false,
+                profile: None,
+                reason: Some(qil_core::gpu_profile::GpuSupportReason::UnknownCapability),
+            },
+        };
+        let line = inventory_line(&device);
+        assert!(line.contains("UUID GPU-fixture"));
+        assert!(line.contains("total 12000 MB"));
+        assert!(line.contains("used 3000 MB"));
+        assert!(line.contains("free 9000 MB transient"));
+        assert!(line.contains("UnknownCapability"));
+    }
+    #[test]
+    fn known_capability_thresholds_match_shared_policy() {
+        for (total, expected) in [(11_999, Profile::Compact), (12_000, Profile::Balanced)] {
+            let gpu = qil_core::gpu::Gpu {
+                uuid: "fixture".into(),
+                pci_bus_id: "bus".into(),
+                name: "NVIDIA Fixture".into(),
+                total_mb: total,
+                used_mb: 0,
+                util: 0,
+                driver: "610.0".into(),
+            };
+            let rec = qil_core::gpu_profile::recommend(
+                &gpu,
+                Some(&qil_core::gpu_profile::GpuCapability {
+                    major: 8,
+                    minor: 6,
+                    compatible: true,
+                }),
+            );
+            assert_eq!(rec.profile, Some(expected));
+        }
+    }
 }

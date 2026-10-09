@@ -2,15 +2,17 @@
 //! WebSocket, embeds interoperable PNG metadata, and optionally writes a JSON sidecar.
 
 use std::path::{Path, PathBuf};
-use std::time::Instant;
+use std::time::Duration;
 
 use futures_util::StreamExt;
-use rand::Rng;
+use rand::{Rng, RngCore};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use tokio::time::Instant;
 
 use crate::config::{Config, DIT, VAE};
 use crate::png_metadata::{embed_generation_metadata, GenerationMetadata};
+use crate::run_control::{RunControl, RunError};
 
 pub const MAX_REFS: usize = 10;
 
@@ -280,6 +282,74 @@ fn should_save_json(save_json: bool) -> bool {
     save_json
 }
 
+fn new_prompt_id() -> String {
+    let mut bytes = [0_u8; 16];
+    rand::thread_rng().fill_bytes(&mut bytes);
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    format!(
+        "{:08x}-{:04x}-{:04x}-{:04x}-{:012x}",
+        u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]),
+        u16::from_be_bytes([bytes[4], bytes[5]]),
+        u16::from_be_bytes([bytes[6], bytes[7]]),
+        u16::from_be_bytes([bytes[8], bytes[9]]),
+        u64::from_be_bytes([
+            0, 0, bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15],
+        ]),
+    )
+}
+
+fn unique_output_path(path: &Path) -> Result<PathBuf, String> {
+    if !path.exists() {
+        return Ok(path.to_path_buf());
+    }
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    let stem = path
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .unwrap_or("image");
+    let extension = path.extension().and_then(|value| value.to_str());
+    let mut suffix = 1_u64;
+    loop {
+        let name = match extension {
+            Some(extension) => format!("{stem} ({suffix}).{extension}"),
+            None => format!("{stem} ({suffix})"),
+        };
+        let candidate = parent.join(name);
+        if !candidate.exists() {
+            return Ok(candidate);
+        }
+        suffix = suffix
+            .checked_add(1)
+            .ok_or_else(|| "Could not find a free output filename".to_string())?;
+    }
+}
+
+fn queue_delete_payload(prompt_id: &str) -> Value {
+    json!({"delete": [prompt_id]})
+}
+
+fn interrupt_payload(prompt_id: &str) -> Value {
+    json!({"prompt_id": prompt_id})
+}
+
+pub struct GenerateOptions<'a> {
+    pub config: &'a Config,
+    pub output_dir: PathBuf,
+    pub control: RunControl,
+    pub on_progress: &'a (dyn Fn(Progress) + Send + Sync),
+}
+
+struct RunContext<'a> {
+    config: &'a Config,
+    output_dir: PathBuf,
+    control: RunControl,
+    on_progress: &'a (dyn Fn(Progress) + Send + Sync),
+    client: reqwest::Client,
+    prompt_id: String,
+    prompt_submitted: bool,
+}
+
 /// Runs one generation. `out` is a folder (a timestamped name is picked) or an exact `.png` path.
 pub async fn run(
     cfg: &Config,
@@ -287,9 +357,146 @@ pub async fn run(
     out: PathBuf,
     on_progress: &(dyn Fn(Progress) + Send + Sync),
 ) -> Result<GenResult, String> {
+    let (cancel_tx, cancel_rx) = tokio::sync::watch::channel(false);
+    let options = GenerateOptions {
+        config: cfg,
+        output_dir: out,
+        control: RunControl::new(cancel_rx, Instant::now() + Duration::from_secs(30 * 60)),
+        on_progress,
+    };
+    let result = run_with_control(req, options)
+        .await
+        .map_err(|error| run_error_text(error, cfg));
+    drop(cancel_tx);
+    result
+}
+
+pub async fn run_with_control(
+    req: GenRequest,
+    options: GenerateOptions<'_>,
+) -> Result<GenResult, RunError> {
+    let client = reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(20))
+        .timeout(Duration::from_secs(120))
+        .build()
+        .map_err(|error| RunError::Request(error.to_string()))?;
+    let mut context = RunContext {
+        config: options.config,
+        output_dir: options.output_dir,
+        control: options.control,
+        on_progress: options.on_progress,
+        client,
+        prompt_id: new_prompt_id(),
+        prompt_submitted: false,
+    };
+    let result = run_inner(req, &mut context).await;
+    if let Err(error) = &result {
+        if context.prompt_submitted {
+            let cleanup =
+                tokio::time::timeout(Duration::from_secs(10), cancel_comfy_prompt(&context)).await;
+            if !matches!(cleanup, Ok(Ok(()))) {
+                return Err(match error {
+                    RunError::Cancelled => RunError::CancellationUnconfirmed,
+                    RunError::TimedOut => RunError::TimeoutUnconfirmed,
+                    RunError::CancellationUnconfirmed => RunError::CancellationUnconfirmed,
+                    RunError::TimeoutUnconfirmed => RunError::TimeoutUnconfirmed,
+                    RunError::Request(message) => RunError::Request(format!(
+                        "{message}; the engine may still be finishing and the next request may queue behind it."
+                    )),
+                });
+            }
+        }
+    }
+    result
+}
+
+fn run_error_text(error: RunError, config: &Config) -> String {
+    match error {
+        RunError::Cancelled => "Cancelled".to_string(),
+        RunError::TimedOut => format!(
+            "Generation timed out; see {}",
+            config.engine_log().display()
+        ),
+        RunError::CancellationUnconfirmed => {
+            "Cancelled; the engine may still be finishing and the next request may queue behind it."
+                .to_string()
+        }
+        RunError::TimeoutUnconfirmed => format!(
+            "Generation timed out; the engine may still be finishing. See {}",
+            config.engine_log().display()
+        ),
+        RunError::Request(message) => message,
+    }
+}
+
+async fn cancel_comfy_prompt(context: &RunContext<'_>) -> Result<(), String> {
+    let base = context.config.base_url();
+    let delete = async {
+        context
+            .client
+            .post(format!("{base}/queue"))
+            .json(&queue_delete_payload(&context.prompt_id))
+            .send()
+            .await
+            .map_err(|error| error.to_string())
+            .and_then(|response| {
+                if response.status().is_success() {
+                    Ok(())
+                } else {
+                    Err(format!(
+                        "queue cancellation returned HTTP {}",
+                        response.status()
+                    ))
+                }
+            })
+    };
+    let interrupt = async {
+        context
+            .client
+            .post(format!("{base}/interrupt"))
+            .json(&interrupt_payload(&context.prompt_id))
+            .send()
+            .await
+            .map_err(|error| error.to_string())
+            .and_then(|response| {
+                if response.status().is_success() {
+                    Ok(())
+                } else {
+                    Err(format!(
+                        "prompt interruption returned HTTP {}",
+                        response.status()
+                    ))
+                }
+            })
+    };
+    let (queued, interrupted) = tokio::join!(delete, interrupt);
+    match (queued, interrupted) {
+        (Ok(()), Ok(())) => Ok(()),
+        (Err(queue_error), Ok(())) => Err(queue_error),
+        (Ok(()), Err(interrupt_error)) => Err(interrupt_error),
+        (Err(queue_error), Err(interrupt_error)) => {
+            Err(format!("{queue_error}; {interrupt_error}"))
+        }
+    }
+}
+
+async fn remove_temp_file(path: &Path) -> Result<(), String> {
+    match tokio::fs::remove_file(path).await {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
+async fn run_inner(req: GenRequest, context: &mut RunContext<'_>) -> Result<GenResult, RunError> {
+    let cfg = context.config;
+    let out = &context.output_dir;
+    let client = &context.client;
+    let prompt_id = &context.prompt_id;
+    let on_progress = context.on_progress;
+    let control = &mut context.control;
     let t0 = Instant::now();
     let p = preset(&req.preset);
-    let client = reqwest::Client::new();
     let base = cfg.base_url();
     let emit = |stage, value, max| on_progress(Progress { stage, value, max });
 
@@ -298,7 +505,10 @@ pub async fn run(
     let mut refs = Vec::with_capacity(refs_in.len());
     for (i, path) in refs_in.iter().enumerate() {
         emit("upload", i as u32, refs_in.len() as u32);
-        refs.push(upload(cfg, &client, Path::new(path), &tag, i + 1).await?);
+        let uploaded = control
+            .race(upload(cfg, client, Path::new(path), &tag, i + 1))
+            .await?;
+        refs.push(uploaded);
     }
 
     let prompt = if req.transparent && refs.is_empty() {
@@ -323,32 +533,53 @@ pub async fn run(
 
     // Open the WebSocket before queueing so the first events are not lost.
     let client_id = format!("qil-{tag}");
-    let (ws, _) = tokio_tungstenite::connect_async(cfg.ws_url(&client_id))
-        .await
-        .map_err(|e| format!("Cannot reach the engine: {e}"))?;
+    let ws_url = cfg.ws_url(&client_id);
+    let (ws, _) = control
+        .race(async {
+            tokio::time::timeout(
+                Duration::from_secs(20),
+                tokio_tungstenite::connect_async(ws_url),
+            )
+            .await
+            .map_err(|_| "WebSocket connection timed out".to_string())?
+            .map_err(|error| format!("Cannot reach the engine: {error}"))
+        })
+        .await?;
     let (_, mut rx) = ws.split();
 
-    let res = client
-        .post(format!("{base}/prompt"))
-        .json(&json!({"prompt": graph, "client_id": client_id}))
-        .send()
-        .await
-        .map_err(|e| e.to_string())?;
+    context.prompt_submitted = true;
+    let prompt_url = format!("{base}/prompt");
+    let prompt_body = json!({"prompt": graph, "client_id": client_id, "prompt_id": prompt_id});
+    let res = control
+        .race(async {
+            client
+                .post(prompt_url)
+                .json(&prompt_body)
+                .send()
+                .await
+                .map_err(|error| error.to_string())
+        })
+        .await?;
     let ok = res.status().is_success();
-    let body: Value = res.json().await.map_err(|e| e.to_string())?;
+    let body: Value = control
+        .race(async { res.json().await.map_err(|error| error.to_string()) })
+        .await?;
     if !ok {
-        return Err(node_error_text(&body));
+        return Err(node_error_text(&body).into());
     }
-    let prompt_id = body["prompt_id"]
-        .as_str()
-        .ok_or("The engine returned no prompt_id")?
-        .to_string();
     emit("load", 0, 0);
 
     let mut sample_start: Option<Instant> = None;
     let mut sample_secs = 0.0;
-    while let Some(msg) = rx.next().await {
-        let Ok(msg) = msg else { break };
+    loop {
+        let received = control
+            .race(async {
+                Ok(tokio::time::timeout(Duration::from_secs(30), rx.next())
+                    .await
+                    .ok())
+            })
+            .await?;
+        let Some(Some(Ok(msg))) = received else { break };
         if !msg.is_text() {
             continue; // binary previews
         }
@@ -380,7 +611,7 @@ pub async fn run(
                 emit("sample", val, max);
             }
             "execution_success" => break,
-            "execution_interrupted" => return Err("Cancelled".into()),
+            "execution_interrupted" => return Err(RunError::Cancelled),
             "execution_error" => {
                 let m = data["exception_message"]
                     .as_str()
@@ -392,7 +623,7 @@ pub async fn run(
                 } else {
                     ""
                 };
-                return Err(format!("{m}{hint}"));
+                return Err(RunError::Request(format!("{m}{hint}")));
             }
             _ => {}
         }
@@ -400,23 +631,27 @@ pub async fn run(
 
     // The WebSocket can drop before the prompt finishes; /history is the source of truth,
     // and it only holds the entry once execution is over.
-    let deadline = Instant::now() + std::time::Duration::from_secs(30 * 60);
     let entry = loop {
-        let hist: Value = client
-            .get(format!("{base}/history/{prompt_id}"))
-            .send()
-            .await
-            .map_err(|e| e.to_string())?
-            .json()
-            .await
-            .map_err(|e| e.to_string())?;
-        let Some(entry) = hist.get(&prompt_id) else {
-            if Instant::now() > deadline {
-                return Err(format!(
-                    "The engine returned no history for prompt {prompt_id}"
-                ));
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(750)).await;
+        let history_url = format!("{base}/history/{prompt_id}");
+        let hist: Value = control
+            .race(async {
+                client
+                    .get(history_url)
+                    .send()
+                    .await
+                    .map_err(|error| error.to_string())?
+                    .json()
+                    .await
+                    .map_err(|error| error.to_string())
+            })
+            .await?;
+        let Some(entry) = hist.get(prompt_id) else {
+            control
+                .race(async {
+                    tokio::time::sleep(Duration::from_millis(750)).await;
+                    Ok(())
+                })
+                .await?;
             continue;
         };
         if entry["status"]["completed"].as_bool() == Some(true)
@@ -424,13 +659,12 @@ pub async fn run(
         {
             break entry.clone();
         }
-        if Instant::now() > deadline {
-            return Err(format!(
-                "The engine did not finish within 30 min; see {}",
-                cfg.engine_log().display()
-            ));
-        }
-        tokio::time::sleep(std::time::Duration::from_millis(750)).await;
+        control
+            .race(async {
+                tokio::time::sleep(Duration::from_millis(750)).await;
+                Ok(())
+            })
+            .await?;
     };
     emit("save", 0, 0);
     let entry = &entry;
@@ -438,49 +672,68 @@ pub async fn run(
         return Err(format!(
             "The engine finished with an error; see {}",
             cfg.engine_log().display()
-        ));
+        )
+        .into());
     }
     let img = output_image(entry)?;
     let filename = img["filename"]
         .as_str()
         .ok_or("The engine image output had no filename")?;
-    let response = client
-        .get(format!("{base}/view"))
-        .query(&[
-            ("filename", filename),
-            ("subfolder", img["subfolder"].as_str().unwrap_or("")),
-            ("type", img["type"].as_str().unwrap_or("output")),
-        ])
-        .send()
-        .await
-        .map_err(|e| format!("Failed to download image {filename}: {e}"))?;
+    let subfolder = img["subfolder"].as_str().unwrap_or("").to_string();
+    let image_type = img["type"].as_str().unwrap_or("output").to_string();
+    let view_url = format!("{base}/view");
+    let response = control
+        .race(async {
+            client
+                .get(view_url)
+                .query(&[
+                    ("filename", filename),
+                    ("subfolder", &subfolder),
+                    ("type", &image_type),
+                ])
+                .send()
+                .await
+                .map_err(|error| format!("Failed to download image {filename}: {error}"))
+        })
+        .await?;
     if !response.status().is_success() {
         return Err(format!(
             "Failed to download image {filename}: HTTP {}",
             response.status()
-        ));
+        )
+        .into());
     }
-    let bytes = response
-        .bytes()
-        .await
-        .map_err(|e| format!("Failed to read image {filename}: {e}"))?;
+    let bytes = control
+        .race(async {
+            response
+                .bytes()
+                .await
+                .map_err(|error| format!("Failed to read image {filename}: {error}"))
+        })
+        .await?;
 
     let (width, height) = image::load_from_memory(&bytes)
         .map(|i| (i.width(), i.height()))
         .unwrap_or((w, h));
-    let file = if out
+    let proposed_file = if out
         .extension()
         .is_some_and(|e| e.eq_ignore_ascii_case("png"))
     {
-        out
+        out.to_path_buf()
     } else {
         let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
         out.join(format!("{stamp}_{}_{seed}.png", req.mode))
     };
+    let file = unique_output_path(&proposed_file)?;
     if let Some(dir) = file.parent() {
-        tokio::fs::create_dir_all(dir)
-            .await
-            .map_err(|e| e.to_string())?;
+        let directory = dir.to_path_buf();
+        control
+            .race(async {
+                tokio::fs::create_dir_all(directory)
+                    .await
+                    .map_err(|error| error.to_string())
+            })
+            .await?;
     }
     let png = embed_generation_metadata(
         &bytes,
@@ -493,9 +746,36 @@ pub async fn run(
             preset: &req.preset,
         },
     )?;
-    tokio::fs::write(&file, png)
-        .await
-        .map_err(|e| e.to_string())?;
+    let final_name = file
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "image.png".to_string());
+    let temporary_file = file.with_file_name(format!(".{final_name}.{tag}.part"));
+    if let Err(write_error) = tokio::fs::write(&temporary_file, png).await {
+        return Err(match remove_temp_file(&temporary_file).await {
+            Ok(()) => RunError::Request(write_error.to_string()),
+            Err(cleanup_error) => RunError::Request(format!(
+                "{write_error}; could not remove temporary image: {cleanup_error}"
+            )),
+        });
+    }
+    if let Err(error) = control.race(async { Ok(()) }).await {
+        return match remove_temp_file(&temporary_file).await {
+            Ok(()) => Err(error),
+            Err(cleanup_error) => Err(RunError::Request(format!(
+                "{}; could not remove temporary image: {cleanup_error}",
+                run_error_text(error, cfg)
+            ))),
+        };
+    }
+    if let Err(rename_error) = tokio::fs::rename(&temporary_file, &file).await {
+        return Err(match remove_temp_file(&temporary_file).await {
+            Ok(()) => RunError::Request(format!("Could not publish generated image: {rename_error}")),
+            Err(cleanup_error) => RunError::Request(format!(
+                "Could not publish generated image: {rename_error}; could not remove temporary image: {cleanup_error}"
+            )),
+        });
+    }
 
     let result = GenResult {
         path: file.to_string_lossy().into_owned(),
@@ -531,20 +811,48 @@ pub async fn run(
     Ok(result)
 }
 
-pub async fn interrupt(cfg: &Config) {
-    let client = reqwest::Client::new();
-    let base = cfg.base_url();
-    let _ = client
-        .post(format!("{base}/queue"))
-        .json(&json!({"clear": true}))
-        .send()
-        .await;
-    let _ = client.post(format!("{base}/interrupt")).send().await;
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn new_prompt_id_is_a_valid_uuid_v4() {
+        let id = new_prompt_id();
+        let parts: Vec<&str> = id.split('-').collect();
+
+        assert_eq!(parts.len(), 5);
+        assert_eq!(parts.iter().map(|part| part.len()).sum::<usize>(), 32);
+        assert_eq!(parts[2].chars().next(), Some('4'));
+        assert!(matches!(
+            parts[3].chars().next(),
+            Some('8' | '9' | 'a' | 'b')
+        ));
+    }
+
+    #[test]
+    fn output_path_adds_numeric_suffix_on_collision() {
+        let root =
+            std::env::temp_dir().join(format!("qil-output-{:x}", rand::thread_rng().gen::<u64>()));
+        std::fs::create_dir_all(&root).unwrap();
+        let path = root.join("20261009_photos_17.png");
+        std::fs::write(&path, b"first").unwrap();
+
+        let next = unique_output_path(&path).unwrap();
+
+        assert_eq!(next.file_name().unwrap(), "20261009_photos_17 (1).png");
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn targeted_cancel_payload_contains_only_the_requested_prompt_id() {
+        let id = "48f2a1de-f6b9-4d13-831e-c6a46d3263a1";
+
+        let delete = queue_delete_payload(id);
+        let interrupt = interrupt_payload(id);
+
+        assert_eq!(delete, json!({"delete": [id]}));
+        assert_eq!(interrupt, json!({"prompt_id": id}));
+    }
 
     #[test]
     fn dims_snap_to_32_and_respect_aspect() {

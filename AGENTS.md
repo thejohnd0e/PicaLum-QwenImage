@@ -18,3 +18,12 @@
 - Generation/setup uses the external ComfyUI process via `qil-core`; for changes spanning UI and CLI behavior, keep shared behavior in `qil-core` rather than duplicating it in a frontend.
 - The real download integration test is `crates/qil-core/tests/download_real.rs`; inspect it before running because it may require network access.
 - Do not treat `target/`, `out/`, or `app/node_modules/` as source; they are build/dependency outputs.
+
+## Versioning rules
+- **Always increment the build version by exactly 1** whenever making changes that result in a new build.
+- Increment the build version before running the final build or creating a release.
+- Never reuse an existing build version for a new build.
+- Keep version information consistent across the CLI, desktop application, installer, and any other files that define or display the build version.
+- Do not reset, skip, or decrement build numbers.
+- Treat the version increment as a mandatory part of the development workflow, including bug fixes, feature changes, and refactoring.
+- Verify that the build version was incremented correctly before considering the task complete.

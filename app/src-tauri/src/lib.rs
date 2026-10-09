@@ -4,9 +4,10 @@ use std::sync::{Mutex, RwLock};
 use std::time::Duration;
 
 use base64::Engine as _;
+use qil_core::prompt_presets::PromptPresetFile;
 use qil_core::{
-    engine, generate, gpu, setup, surprise, Config, Engine, EngineState, GenRequest, GenResult,
-    Profile,
+    engine, generate, gpu, prompt_presets, setup, surprise, Config, Engine, EngineState,
+    GenRequest, GenResult, Profile,
 };
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, RunEvent, State};
@@ -191,6 +192,22 @@ fn save_app_settings(
     }
     *current = updated;
     Ok(settings_snapshot(&current))
+}
+
+#[tauri::command]
+fn prompt_presets_load(settings: State<'_, Settings>) -> Result<PromptPresetFile, String> {
+    let config = cfg(&settings);
+    prompt_presets::load(&config.runtime_dir).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn prompt_presets_save(
+    settings: State<'_, Settings>,
+    document: PromptPresetFile,
+) -> Result<PromptPresetFile, String> {
+    let config = cfg(&settings);
+    prompt_presets::save(&config.runtime_dir, &document).map_err(|error| error.to_string())?;
+    Ok(document)
 }
 
 // ── Engine ──
@@ -492,6 +509,8 @@ pub fn run() {
             app_settings,
             pick_output_folder,
             save_app_settings,
+            prompt_presets_load,
+            prompt_presets_save,
             engine_start,
             engine_stop,
             generate,

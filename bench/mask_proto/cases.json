@@ -1,0 +1,26 @@
+[
+  {
+    "id": "bici_saddle",
+    "note": "small object on a textured background",
+    "source": "bici.jpg",
+    "shape": "ellipse",
+    "box": [0.59, 0.34, 0.73, 0.44],
+    "instruction": "Make the bicycle saddle brown leather."
+  },
+  {
+    "id": "cafe_chair",
+    "note": "object near / touching the image edge",
+    "source": "cafe.jpg",
+    "shape": "rect",
+    "box": [0.0, 0.60, 0.12, 0.82],
+    "instruction": "Make the left-most chair white."
+  },
+  {
+    "id": "perro_ear",
+    "note": "region with a clear boundary",
+    "source": "perro.jpg",
+    "shape": "ellipse",
+    "box": [0.52, 0.18, 0.64, 0.42],
+    "instruction": "Make the dog's ear dark brown."
+  }
+]

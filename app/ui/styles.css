@@ -479,3 +479,25 @@ input.mono { font-family: var(--font-mono); font-size: 12px; }
   .prompt-presets-list-actions .btn { flex: 1 1 auto; }
 }
 .gpu-list { display: grid; gap: 6px; } .gpu-card { width: 100%; text-align: left; color: var(--text); font: inherit; } .gpu-card.selected { border-color: var(--border-strong); background: var(--sunken); } .profile-mode { display: flex; gap: 14px; margin-bottom: 8px; font-size: 12px; }
+
+/* ── Mask editor ── */
+.mask-dialog { width: min(1040px, calc(100vw - 32px)); max-height: calc(100vh - 32px); display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
+.mask-dialog h2 { margin-bottom: 0; }
+.mask-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.mask-toolbar-gap { flex: 1 1 8px; }
+.mask-tool[aria-pressed="true"] { background: var(--primary); color: var(--on-primary); border-color: var(--primary); font-weight: 600; }
+.mask-tool[aria-pressed="true"]::before { content: "\2713"; }
+.mask-range { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); }
+.mask-range input[type="range"] { width: 110px; }
+.mask-range .mono { min-width: 42px; }
+.mask-stage { position: relative; flex: 1 1 auto; min-height: 220px; height: min(56vh, 620px); border: 1px solid var(--border); border-radius: var(--r); background: var(--sunken); overflow: hidden; }
+.mask-stage canvas { display: block; cursor: crosshair; touch-action: none; }
+.mask-loading { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
+.mask-loading[hidden] { display: none; }
+.mask-discard { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px; border: 1px solid var(--pend); border-radius: var(--r-sm); background: var(--sunken); }
+.mask-discard[hidden], .settings-error[hidden] { display: none; }
+.mask-dialog textarea { width: 100%; }
+.mask-ref { display: grid; gap: 4px; }
+.mask-ref select { width: 100%; }
+.mask-dialog .settings-actions { margin-top: 4px; }
+@media (max-width: 720px) { .mask-range input[type="range"] { width: 80px; } .mask-stage { height: 44vh; } }

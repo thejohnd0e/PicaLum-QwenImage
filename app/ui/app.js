@@ -53,6 +53,19 @@
     isBusy: () => state.busy,
   });
 
+  const maskUi = window.QilMaskEditorUi.create({
+    getElement: $,
+    translate: t,
+    fileSrc,
+    notify,
+    getSourcePath: () => state.refs[0]?.path || null,
+    getPrompt: () => $("promptPhotos").value.trim(),
+    getReferences: () => state.refs.slice(1).map((r) => ({ path: r.path, name: `${r.orig || r.path}`.split(/[\\/]/).pop() })),
+    canRun: () => (state.busy || state.verification.state === "running" ? t("maskBusy") : state.engine !== "ready" ? t("maskEngineOff") : null),
+    submit: (payload) => runMaskedEdit(payload),
+    cancel: () => cancelGeneration(),
+  });
+
   function localGet(k, d) { try { return localStorage.getItem("qil." + k) ?? d; } catch { return d; } }
   function localSet(k, v) { try { localStorage.setItem("qil." + k, v); } catch { /* no storage */ } }
   const fmtBytes = (b) => (b >= 1073741824 ? (b / 1073741824).toFixed(1) + " GB" : Math.round(b / 1048576) + " MB");
@@ -311,6 +324,8 @@
       box.appendChild(add);
     }
     $("refCount").textContent = `${state.refs.length} / ${MAX_REFS}`;
+    $("maskEditBtn").disabled = state.busy || state.refs.length === 0;
+    $("maskEditBtn").title = state.refs.length === 0 ? t("maskEditNeedPhoto") : "";
   }
   // Generate button: the label says what will happen
   function currentPrompt() {
@@ -340,6 +355,8 @@
     ["genMenuBtn", "gen4Btn", "gen8Btn", "genForeverBtn"].forEach((id) => { $(id).disabled = !ok; });
     if (!ok) setGenerateMenu(false);
     else if (!$("genMenu").hidden) setGenerateMenu(true);
+    $("maskEditBtn").disabled = state.busy || state.refs.length === 0;
+    $("maskEditBtn").title = state.refs.length === 0 ? t("maskEditNeedPhoto") : "";
     $("cancelBtn").hidden = !state.busy;
     $("batchRunning").hidden = !state.batch;
     $("stopAfterCurrentBtn").hidden = !state.batch || state.batch.count === null || !state.batch.requestActive || state.batch.stopAfterCurrent;
@@ -509,6 +526,35 @@
       renderEngine();
     }
   }
+  // Mask-guided edit: one request, one final composite in the history (the raw model output never is).
+  const maskedEditRun = window.QilMaskedEditRun.create({
+    invoke,
+    state,
+    translate: t,
+    lockedSeed: () => ($("seedLock").checked && $("seed").value ? Number($("seed").value) : null),
+    hooks: {
+      begin() {
+        hideNotice();
+        updateGenButton();
+        renderEngine();
+        state.stepTimes = [];
+        showWorking("load", 0, 0);
+      },
+      end() {
+        hideWorking();
+        updateGenButton();
+        renderHistory();
+        renderEngine();
+      },
+      applyResult(item) {
+        showImage(item);
+        renderHistory();
+      },
+      notify,
+    },
+  });
+  const runMaskedEdit = (payload) => maskedEditRun.run(payload);
+  $("maskEditBtn").addEventListener("click", () => maskUi.open());
   $("genBtn").addEventListener("click", () => generate());
   function cancelGeneration() {
     if (!state.busy) return;
@@ -728,6 +774,10 @@
 
   // Keyboard
   document.addEventListener("keydown", (e) => {
+    if (maskUi.isOpen()) {
+      maskUi.handleKeydown(e);
+      return;
+    }
     if (promptPresets.isOpen()) {
       promptPresets.handleKeydown(e);
       return;
@@ -783,7 +833,14 @@
     try {
       await listen("engine", (e) => renderEngine(e.payload));
       await listen("gpu-verification-progress", (e) => verification.setProgress(Number(e.payload?.value||e.payload?.percent||0)));
-      await listen("gen-progress", (e) => { if (state.busy) showWorking(e.payload.stage, e.payload.value, e.payload.max); });
+      await listen("gen-progress", (e) => {
+        if (!state.busy) return;
+        showWorking(e.payload.stage, e.payload.value, e.payload.max);
+        if (maskUi.busy) {
+          const { stage, value, max } = e.payload;
+          maskUi.setStatus(t(STAGE_KEY[stage] || "stSample") + (stage === "sample" && max > 0 ? ` · ${t("step", value, max)}` : ""));
+        }
+      });
       await listen("setup", (e) => onSetupEvent(e.payload));
       await listen("setup-finished", (e) => onSetupFinished(e.payload));
       await listen("tauri://drag-enter", () => { if (!$("mainView").hidden) $("dropveil").hidden = false; });

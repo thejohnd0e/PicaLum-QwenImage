@@ -7,3 +7,5 @@ assets/banner-candidates/
 bench/tiers/results/*/*
 !bench/tiers/results/*/results.json
 *.log
+
+bench/mask_proto/work/

@@ -9,6 +9,8 @@ pub(crate) struct GenerationMetadata<'a> {
     pub width: u32,
     pub height: u32,
     pub preset: &'a str,
+    /// Extra "Key: value" lines appended to the parameters text (e.g. masked-edit details).
+    pub extra: Option<&'a str>,
 }
 
 pub(crate) fn embed_generation_metadata(
@@ -19,10 +21,14 @@ pub(crate) fn embed_generation_metadata(
         return Err("invalid PNG signature".into());
     }
 
-    let parameters = format!(
+    let mut parameters = format!(
         "{}\n\nModel: Qwen-Image-2.1\nSeed: {}\nSteps: {}\nSize: {}x{}\nPreset: {}",
         meta.prompt, meta.seed, meta.steps, meta.width, meta.height, meta.preset
     );
+    if let Some(extra) = meta.extra {
+        parameters.push('\n');
+        parameters.push_str(extra);
+    }
     let xmp = format!(
         "<?xpacket begin=\"\u{feff}\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n<x:xmpmeta xmlns:x=\"adobe:ns:meta/\"><rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:Description xmlns:Iptc4xmpExt=\"http://iptc.org/std/Iptc4xmpExt/2008-02-29/\" Iptc4xmpExt:AIPromptInformation=\"{}\" Iptc4xmpExt:AISystemUsed=\"PicaLum QwenImage\" Iptc4xmpExt:AISystemVersionUsed=\"Qwen-Image-2.1\" Iptc4xmpExt:DigitalSourceType=\"http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia\"/></rdf:RDF></x:xmpmeta>\n<?xpacket end=\"w\"?>",
         escape_xml(meta.prompt)
@@ -150,6 +156,7 @@ mod tests {
             width: 1024,
             height: 768,
             preset: "standard",
+            extra: None,
         };
         let embedded = embed_generation_metadata(&original, &meta).unwrap();
         let old_chunks = chunks(&original);
@@ -195,7 +202,8 @@ mod tests {
                 steps: 1,
                 width: 1,
                 height: 1,
-                preset: "draft"
+                preset: "draft",
+                extra: None
             }
         )
         .is_err());
@@ -207,7 +215,8 @@ mod tests {
                 steps: 1,
                 width: 1,
                 height: 1,
-                preset: "draft"
+                preset: "draft",
+                extra: None
             }
         )
         .is_err());

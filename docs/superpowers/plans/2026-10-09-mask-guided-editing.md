@@ -80,6 +80,25 @@ Proceed with the simplest conditioning strategy only if local edit quality is re
 
 **Acceptance:** A documented, reproducible conditioning method is selected, including known limitations and representative before/raw/composite examples.
 
+### Gate result (2026-10-10, RTX 3060 12 GB, `balanced` profile)
+
+Reproduce with `bench/mask_proto/run.ps1` (inputs and masks in `bench/mask_proto/cases.json`; outputs in the ignored `bench/mask_proto/work/`). Three cases (small object on texture, object at the image edge, clear-boundary region), `draft` preset with seeds 101/202/303, then candidate B on `standard` with seeds 101/202.
+
+| Candidate | Result |
+|---|---|
+| A: mask as `image_2` | Rejected. Seed 101 drew the white mask outline into the output (dog ear); seed 303 recoloured three objects (cafe). |
+| B: red outline + tint on `image_1`, prompt explains the mark | **Selected.** 15/15 runs: local edit, mark fully removed in the output, one object edited in the cafe case on every seed. |
+| C: instruction only | Works on simple cases, over-edits in the cafe case; compositing trims it but cuts objects at the mask edge. |
+
+Strategy identifier: `marked-reference-v1`. Prompt template (B): `The photo contains a red outline and red tint marking the region to edit. {instruction} Apply the change only inside the marked region. Remove the red outline and tint, and keep everything outside the region exactly the same.`
+
+Known limits and facts for later tasks:
+- Compositing is mandatory: the model may still change content outside the mark. Outside-mask pixels were exactly equal to the source in all 33 composites checked.
+- The engine returns a different canvas than the source (1248x832 for 1560x1040, 1920x1280 and 1920x1300 inputs), so the raw result must be resampled to the source size before compositing. Aspect ratio can differ slightly (1920x1300 source); resample, do not crop.
+- `standard` takes about 125-135 s per edit on this GPU; peak VRAM 11.2 GB of 12 GB.
+- Qualification: three cases, two to three seeds; not tested on 8 GB or compact profiles.
+- Do not run `qil bench` while the desktop app owns the engine; closing the app mid-run kills the engine and fails the run.
+
 ## 3. Task 2 — Implement and Test Mask Compositing in `qil-core`
 
 **Files:** new `crates/qil-core/src/masked_edit.rs`; `crates/qil-core/src/lib.rs`; Rust tests.

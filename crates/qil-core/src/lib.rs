@@ -10,6 +10,8 @@ pub mod engine;
 pub mod generate;
 pub mod gpu;
 pub mod gpu_profile;
+pub mod masked_edit;
+pub mod masked_run;
 mod png_metadata;
 pub mod prompt_presets;
 pub mod run_control;

@@ -314,6 +314,73 @@ async fn generate(
         })
 }
 
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct MaskedEditArgs {
+    source_path: String,
+    /// Grayscale PNG, source-sized (EXIF-normalized), white = editable; base64.
+    mask_png_base64: String,
+    instruction: String,
+    preset: String,
+    seed: Option<u64>,
+    feather_px: u32,
+    /// Extra photos whose content goes into the painted area (`<image2>`, ...).
+    #[serde(default)]
+    references: Vec<String>,
+}
+
+/// Mask-guided edit of one image. Shares the generation lock, cancel channel and
+/// progress event with `generate`; only the final composite is published.
+#[tauri::command]
+async fn generate_masked_edit(
+    app: AppHandle,
+    settings: State<'_, Settings>,
+    args: MaskedEditArgs,
+) -> Result<GenResult, String> {
+    if BUSY.swap(true, Ordering::SeqCst) {
+        return Err("A generation is already running.".into());
+    }
+    let _flag = Flag(&BUSY);
+    let mask_png = base64::engine::general_purpose::STANDARD
+        .decode(args.mask_png_base64.as_bytes())
+        .map_err(|e| format!("The mask is not valid base64: {e}"))?;
+    let (cancel_tx, cancel_rx) = tokio::sync::watch::channel(false);
+    *settings
+        .active_generation
+        .lock()
+        .map_err(|_| "Generation cancellation state is unavailable.".to_string())? =
+        Some(cancel_tx);
+    let _active = ActiveGenerationGuard(&settings);
+    let c = cfg(&settings);
+    if !engine::is_up(&c).await {
+        return Err("The engine is off.".into());
+    }
+    let emit = move |p: qil_core::Progress| {
+        let _ = app.emit("gen-progress", p);
+    };
+    let options = generate::GenerateOptions {
+        config: &c,
+        output_dir: c.output_dir.clone(),
+        control: qil_core::run_control::RunControl::new(
+            cancel_rx,
+            tokio::time::Instant::now() + Duration::from_secs(30 * 60),
+        ),
+        on_progress: &emit,
+    };
+    let req = qil_core::masked_run::MaskedEditRequest {
+        source_path: PathBuf::from(args.source_path),
+        mask_png,
+        instruction: args.instruction,
+        preset: args.preset,
+        seed: args.seed,
+        feather_px: args.feather_px,
+        references: args.references.into_iter().map(PathBuf::from).collect(),
+    };
+    qil_core::masked_run::run_masked_edit(req, options)
+        .await
+        .map_err(|error| qil_core::masked_run::error_text(error, &c))
+}
+
 #[tauri::command]
 async fn cancel(settings: State<'_, Settings>) -> Result<(), String> {
     let active = settings
@@ -350,17 +417,7 @@ fn app_version() -> &'static str {
 /// Decodes an image as it should be seen: phone photos are often stored sideways with an
 /// EXIF orientation tag, which image::open ignores.
 fn open_upright(path: &str) -> Result<image::DynamicImage, String> {
-    let err = |e: &dyn std::fmt::Display| format!("Cannot open the image: {e}");
-    let mut decoder = image::ImageReader::open(path)
-        .and_then(|r| r.with_guessed_format())
-        .map_err(|e| err(&e))?
-        .into_decoder()
-        .map_err(|e| err(&e))?;
-    let orientation = image::ImageDecoder::orientation(&mut decoder)
-        .unwrap_or(image::metadata::Orientation::NoTransforms);
-    let mut img = image::DynamicImage::from_decoder(decoder).map_err(|e| err(&e))?;
-    img.apply_orientation(orientation);
-    Ok(img)
+    qil_core::masked_run::open_upright(std::path::Path::new(path))
 }
 
 /// Writes a copy of a reference turned 90° clockwise and returns its path. The user's file is
@@ -530,6 +587,7 @@ pub fn run() {
             engine_start,
             engine_stop,
             generate,
+            generate_masked_edit,
             cancel,
             gpu_verification_start,
             gpu_verification_cancel,

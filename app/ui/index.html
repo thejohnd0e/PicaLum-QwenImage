@@ -100,6 +100,47 @@
     </section>
   </div>
 
+  <div class="settings-backdrop mask-backdrop" id="maskBackdrop" hidden>
+    <section class="settings-dialog mask-dialog" id="maskDialog" role="dialog" aria-modal="true" aria-labelledby="maskHeading" tabindex="-1">
+      <h2 id="maskHeading" data-i18n="maskTitle"></h2>
+      <div class="mask-toolbar" role="toolbar" data-i18n-aria="maskTools">
+        <button type="button" class="btn btn-sm mask-tool" id="maskBrush" aria-pressed="true" data-i18n="maskBrush"></button>
+        <button type="button" class="btn btn-sm mask-tool" id="maskEraser" aria-pressed="false" data-i18n="maskEraser"></button>
+        <label class="mask-range"><span data-i18n="maskSize"></span> <input type="range" id="maskSize" min="1" max="200" value="32"> <span class="mono muted" id="maskSizeValue"></span></label>
+        <label class="mask-range"><span data-i18n="maskFeather"></span> <input type="range" id="maskFeather" min="0" max="64" value="8"> <span class="mono muted" id="maskFeatherValue"></span></label>
+        <span class="mask-toolbar-gap"></span>
+        <button type="button" class="btn btn-sm" id="maskUndoBtn" data-i18n="maskUndo"></button>
+        <button type="button" class="btn btn-sm" id="maskRedoBtn" data-i18n="maskRedo"></button>
+        <button type="button" class="btn btn-sm" id="maskClearBtn" data-i18n="maskClear"></button>
+        <button type="button" class="btn btn-sm" id="maskFitBtn" data-i18n="maskFit"></button>
+      </div>
+      <div class="mask-stage" id="maskStage">
+        <canvas id="maskCanvas" role="img" data-i18n-aria="maskCanvasLabel" aria-describedby="maskCanvasHint"></canvas>
+        <p class="mask-loading muted" id="maskLoading" data-i18n="maskLoading"></p>
+      </div>
+      <p class="hint" id="maskCanvasHint" data-i18n="maskCanvasHint"></p>
+      <div class="mask-ref" id="maskRefRow" hidden>
+        <label class="label" for="maskRef" data-i18n="maskRefLabel"></label>
+        <select id="maskRef"></select>
+        <p class="hint" data-i18n="maskRefHint"></p>
+      </div>
+      <label class="label" for="maskInstruction" data-i18n="instruction"></label>
+      <textarea id="maskInstruction" rows="3" spellcheck="false" data-i18n-ph="maskInstructionPh"></textarea>
+      <p class="hint" data-i18n="maskNote"></p>
+      <p class="mono muted" id="maskStatus" role="status" aria-live="polite"></p>
+      <p class="settings-error" id="maskError" role="alert" hidden></p>
+      <div class="mask-discard" id="maskDiscard" role="alertdialog" aria-labelledby="maskDiscardText" hidden>
+        <span id="maskDiscardText" data-i18n="maskDiscardText"></span>
+        <button type="button" class="btn btn-sm" id="maskDiscardBtn" data-i18n="maskDiscard"></button>
+        <button type="button" class="btn btn-sm btn-primary" id="maskKeep" data-i18n="maskKeep"></button>
+      </div>
+      <div class="settings-actions">
+        <button type="button" class="btn" id="maskClose"></button>
+        <button type="button" class="btn btn-primary" id="maskGenerate"></button>
+      </div>
+    </section>
+  </div>
+
   <!-- ── First run ── -->
   <section class="setup" id="setupView" hidden>
     <div class="setup-inner">
@@ -183,6 +224,8 @@
           </div>
           <div class="refs" id="refs"></div>
           <p class="hint" data-i18n-html="refsHint"></p>
+          <button type="button" class="btn btn-sm" id="maskEditBtn" data-i18n="maskEdit" disabled></button>
+          <p class="hint" data-i18n="maskEditHint"></p>
           <label class="label" for="promptPhotos" data-i18n="instruction"></label>
           <textarea id="promptPhotos" rows="5" spellcheck="false" data-i18n-ph="instrPh"></textarea>
           <div class="prompt-preset-controls">
@@ -347,6 +390,9 @@
   <script src="prompt-presets.js"></script>
   <script src="viewer.js"></script>
   <script src="viewer-controller.js"></script>
+  <script src="mask-editor.js"></script>
+  <script src="mask-editor-ui.js"></script>
+  <script src="masked-edit-run.js"></script>
   <script src="verification-controller.js"></script>
   <script src="app.js"></script>
 </body>

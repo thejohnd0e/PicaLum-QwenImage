@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.18 — 2026-10-10
+
+- Mask-guided editing (beta): **Edit an area** in Edit mode opens a brush editor for the first photo (brush, eraser, size, edge softness, undo/redo, zoom, pan; English, Russian and Spanish). The model sees the area as a red outline and tint and the app composites the result, so pixels outside the painted area are exactly the source's. This is application-level compositing, not native Qwen inpainting.
+- Optionally choose another Edit photo as a reference for the painted area (`<image2>`).
+- The result keeps the source size and is the only file added to the history; the source file is never changed.
+- Core: new `masked_edit` (mask validation and inward-feathered, alpha-aware composite) and `masked_run` (marking, engine run, resampling, publishing) modules; Tauri command `generate_masked_edit` shares the generation lock, cancel and progress with normal runs.
+- Prototype scripts for comparing mask guidance strategies: `bench/mask_proto`.
+- Fix: the active tool check mark in the mask editor.
+
 ## 0.1.15 — 2026-10-10
 
 - Desktop header: larger product name; the Create / Edit / Surprise tabs are larger and moved away from the brand, centered between it and the status controls.

@@ -61,11 +61,25 @@ Qwen-Image-2.1 came out on September 20, 2026. It is the first open-weight image
 | **Create** | Text → image | Draft 1024² · Standard 1.6 MP · Max native 2K, seven aspect ratios, lockable seed |
 | **Transparency** | Native RGBA | Real alpha channel from the model, no background-removal tricks |
 | **Edit** | 1–10 reference photos | Relight, restyle, remove objects or people, rewrite signs, combine subjects; the first photo is the canvas. Save and manage reusable prompt presets in the app. |
+| **Edit an area** | Brush mask (beta) | Paint the area to change on the first photo and describe the change; optionally pick another photo as the content for that area. Everything outside the painted area stays pixel-identical to the source. The result keeps the source size. See [how it works](#mask-guided-editing) |
 | **Surprise me** | Idea generator | Style × subject × place × light, or a curated idea; optional theme |
 | **Setup** | One-command build + one-time install | Pinned ComfyUI, Python 3.12, PyTorch CUDA 13, weights with resume and SHA-256 checks |
 | **CLI** | `qil` | `doctor` · `setup` · `generate` · `edit` · `surprise` · `bench` · `config` |
 | **Privacy** | Local | Prompts and photos only ever go to the engine on `127.0.0.1`. Prompt and model metadata are embedded in every PNG; adjacent JSON sidecars are optional in desktop settings |
 | **History** | Session-only | Clear history in the app or restart to reset the history view; saved PNG and JSON files stay in the output folder |
+
+## Mask-guided editing
+
+In **Edit**, **Edit an area** opens the first photo in a brush editor (brush, eraser, size, edge softness, undo/redo, zoom and pan). Describe what the painted area should become; optionally choose another photo as a reference and call it `<image2>`.
+
+How it works, and what it does and does not guarantee:
+
+- The model never receives a mask. It sees your photo with the area marked by a red outline and tint, and is told to edit only inside it. The prototype in `bench/mask_proto` compared this with sending the mask as a second image (the mask outline leaked into results) and with the instruction alone (it over-edited neighbouring objects).
+- The app then composites the result: **outside the painted area the final image has exactly the source pixels**. Inside it, the edge is softened inward by the "edge softness" setting; the painted area is never expanded.
+- The model may draw outside the painted area; that part is discarded. When placing an object from a reference photo, paint an area big enough for the whole object, or it will be cut off.
+- Be specific. "Dark smoky eye shadow and bold red lipstick" works; "heavy makeup" gets a timid result. Fine edits come out better on Standard than on Draft.
+- The result has the source size (resampled from the engine's canvas) and is the only file added to the history; the source file is never modified. The mask is not saved: re-running an edit means painting it again.
+- Experimental: tested on a few photos and seeds on an RTX 3060, `balanced` profile; not yet on 8 GB or the compact profile.
 
 ## Honest benchmark: where it wins and where it loses
 
@@ -231,7 +245,7 @@ The compact profile cuts peak VRAM by about 2.5 GB at the same speed. **8 GB car
 
 - **NVIDIA on Windows only.** For AMD, Intel, Apple Silicon or cards under 8 GB, use [nihui/qwenimage-ncnn-vulkan](https://github.com/nihui/qwenimage-ncnn-vulkan): a CLI that runs on any Vulkan GPU by trading speed for memory.
 - **No live preview** while sampling; you see the final image.
-- **No masks or brush.** Local edits are described in words; the model supports masks and marks, the app doesn't expose them yet.
+- **Masks are applied by the app, not by the model.** Qwen-Image-2.1 has no mask input, so there is no native inpainting: see [Mask-guided editing](#mask-guided-editing). Same-size output only; outpainting and custom canvas sizes are not available yet.
 - **No prompt enhancer.** Qwen's official rewriter is a separate 9B model; it doesn't fit alongside on 12 GB.
 - **Not for commercial use** while the weights stay under the Qwen Research License.
 
@@ -249,7 +263,7 @@ The compact profile cuts peak VRAM by about 2.5 GB at the same speed. **8 GB car
 crates/qil-core   installer, engine lifecycle, generation client, GPU detection (Rust)
 crates/qil-cli    the qil command line
 app/              Tauri 2 desktop app (Rust + plain HTML/CSS/JS, English, Russian and Spanish)
-bench/            suite.json, input photos with credits, results, verdicts, site builder
+bench/            suite.json, input photos with credits, results, verdicts, site builder, mask-guidance prototype
 docs/             GitHub Pages benchmark site
 ```
 

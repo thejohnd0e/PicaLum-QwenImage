@@ -278,7 +278,7 @@ fn local_preview_path(cfg: &Config, image: &Value) -> Option<PathBuf> {
     Some(cfg.comfy_dir().join("temp").join(relative).join(filename))
 }
 
-fn should_save_json(save_json: bool) -> bool {
+pub(crate) fn should_save_json(save_json: bool) -> bool {
     save_json
 }
 
@@ -299,7 +299,7 @@ fn new_prompt_id() -> String {
     )
 }
 
-fn unique_output_path(path: &Path) -> Result<PathBuf, String> {
+pub(crate) fn unique_output_path(path: &Path) -> Result<PathBuf, String> {
     if !path.exists() {
         return Ok(path.to_path_buf());
     }
@@ -410,7 +410,7 @@ pub async fn run_with_control(
     result
 }
 
-fn run_error_text(error: RunError, config: &Config) -> String {
+pub(crate) fn run_error_text(error: RunError, config: &Config) -> String {
     match error {
         RunError::Cancelled => "Cancelled".to_string(),
         RunError::TimedOut => format!(
@@ -480,7 +480,7 @@ async fn cancel_comfy_prompt(context: &RunContext<'_>) -> Result<(), String> {
     }
 }
 
-async fn remove_temp_file(path: &Path) -> Result<(), String> {
+pub(crate) async fn remove_temp_file(path: &Path) -> Result<(), String> {
     match tokio::fs::remove_file(path).await {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
@@ -744,6 +744,7 @@ async fn run_inner(req: GenRequest, context: &mut RunContext<'_>) -> Result<GenR
             width,
             height,
             preset: &req.preset,
+            extra: None,
         },
     )?;
     let final_name = file

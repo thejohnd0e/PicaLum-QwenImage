@@ -1,7 +1,5 @@
 <div align="center">
 
-<img src="assets/banner.jpg" alt="PicaLum QwenImage — run Qwen-Image-2.1 text-to-image and photo editing on a 12 GB NVIDIA GPU. This banner was generated and then edited by the model on an RTX 3060." width="100%"/>
-
 **Type a prompt or drop up to 10 photos: Qwen-Image-2.1 renders it on your 12 GB GPU in about 35 s, and nothing leaves your PC.**
 
 [![Status](https://img.shields.io/badge/status-beta-d29922?style=flat-square)](CHANGELOG.md)
@@ -32,27 +30,6 @@
 Qwen-Image-2.1 came out on September 20, 2026. It is the first open-weight image model that is genuinely good **and** small: a 7B generator, where most good open models are 10–20B. This repo is the missing piece for people who don't own a 24 GB card: a one-click desktop app and a CLI that install it, fit it into 12 GB of VRAM, and get out of your way.
 
 <sub>Unofficial. Not affiliated with Alibaba or the Qwen team. The model weights are non-commercial; see [License](#license).</sub>
-
-## Showcase
-
-<p align="center"><img src="assets/screen-edit.png" alt="PicaLum QwenImage editing a generated bookstore image into a snowy night; the reference, the instruction, quick edit buttons and the history strip are visible" width="100%"/></p>
-<p align="center"><sub><b>Photos mode.</b> The bookstore on the right of the history strip was generated from text; "Edit this image" sent it back as a reference, one click on <b>Snowy night</b>, and 53 s later the snow and the cold light came in while the staircase, the lamps and the cat stayed put.</sub></p>
-
-<table>
-<tr>
-<td width="50%">
-<p align="center"><img src="assets/screen-setup.png" alt="First-run setup screen showing the detected RTX 3060, the recommended VRAM profile and the list of files to install" width="100%"/></p>
-<p align="center"><sub>First run. It reads your GPU, driver and free disk, recommends a profile, and shows every file before downloading. Already have the weights? Point it at that folder and they are reused.</sub></p>
-</td>
-<td width="50%">
-<p align="center"><img src="assets/screen-working.png" alt="The app mid-generation showing step 4 of 20, 1.8 seconds per step and 29 seconds left, with VRAM at 11.3 of 12 GB" width="100%"/></p>
-<p align="center"><sub>Mid-generation. Step count, seconds per step and time left come from the engine itself; the meter top-right is your real VRAM (<b>11.3 / 12 GB</b>).</sub></p>
-</td>
-</tr>
-</table>
-
-<p align="center"><img src="assets/banner-edit-before-after.jpg" alt="Before and after: the model removed gibberish small text from its own banner while keeping everything else" width="720"/></p>
-<p align="center"><sub>The banner at the top was made by the model too. It rendered the title perfectly but invented small gibberish text under the pictures (left); a second pass in Photos mode, <i>"remove all the small text at the bottom…"</i>, cleaned it (right).</sub></p>
 
 ## What it does
 

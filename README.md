@@ -147,7 +147,7 @@ Close and reopen the terminal afterwards so it picks up the new tools.
 
 ```powershell
 git clone https://github.com/thejohnd0e/PicaLum-QwenImage; cd PicaLum-QwenImage
-powershell -ExecutionPolicy Bypass -File .uild.ps1
+powershell -ExecutionPolicy Bypass -File ./build.ps1
 ```
 
 </td></tr>
@@ -163,7 +163,7 @@ pwsh -ExecutionPolicy Bypass -File ./build.ps1
 
 ```bat
 git clone https://github.com/thejohnd0e/PicaLum-QwenImage && cd PicaLum-QwenImage
-.uild.cmd
+.\build.cmd
 ```
 
 </td></tr>

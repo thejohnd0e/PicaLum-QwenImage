@@ -1,5 +1,8 @@
 <div align="center">
 
+<p><img src="assets/Screenshot%20-%202026-10-12%2017.44.28.png" alt="PicaLum QwenImage — Create mode with prompt, quality, aspect ratio and seed controls" width="100%"/></p>
+<p><img src="assets/Screenshot%20-%202026-10-12%2017.44.39.png" alt="PicaLum QwenImage — Edit mode with reference photos, editing instruction and prompt presets" width="100%"/></p>
+
 **Type a prompt or drop up to 10 photos: Qwen-Image-2.1 renders it on your 12 GB GPU in about 35 s, and nothing leaves your PC.**
 
 [![Status](https://img.shields.io/badge/status-beta-d29922?style=flat-square)](CHANGELOG.md)

@@ -1,11 +1,55 @@
-/target/
+# Build outputs and dependencies
+target/
 /out/
 node_modules/
 app/src-tauri/gen/
 dist/
+
+# Local agent state, handoff notes and implementation plans
+.omo/
+.opencode/
+.claude/
+.codex/
+.playwright-mcp/
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+/STATUS.md
+/TODO.md
+/DECISIONS.md
+/DESIGN.md
+/docs/superpowers/
+
+# Local QA artifacts and generated benchmark work
+/qa-*.png
+/qa-*.jpg
+/qa-*.webp
 assets/banner-candidates/
 bench/tiers/results/*/*
 !bench/tiers/results/*/results.json
-*.log
-
 bench/mask_proto/work/
+
+# Python caches and virtual environments
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Editor, OS and temporary files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~
+*.tmp
+*.bak
+*.log
+.env
+.env.*
+!.env.example

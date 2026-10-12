@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.19 — 2026-10-12
+
+- Publish a Windows x64 installer, standalone desktop application and `qil` CLI for the current feature set, including mask-guided editing from 0.1.18.
+- Reorganize the README for everyday users: plain-language feature overview, installer-first getting started, desktop instructions and troubleshooting before developer / CLI details.
+- Clearly identify RTX 3060 12 GB as the only tested GPU hardware; real 10 GB cards remain untested and experimental, with no guarantee of successful generation.
+
 ## 0.1.18 — 2026-10-10
 
 - Mask-guided editing (beta): **Edit an area** in Edit mode opens a brush editor for the first photo (brush, eraser, size, edge softness, undo/redo, zoom, pan; English, Russian and Spanish). The model sees the area as a red outline and tint and the app composites the result, so pixels outside the painted area are exactly the source's. This is application-level compositing, not native Qwen inpainting.

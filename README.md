@@ -3,11 +3,11 @@
 **Type a prompt or drop up to 10 photos: Qwen-Image-2.1 renders it on your 12 GB GPU in about 35 s, and nothing leaves your PC.**
 
 [![Status](https://img.shields.io/badge/status-beta-d29922?style=flat-square)](CHANGELOG.md)
-[![Windows](https://img.shields.io/badge/windows-10%20%7C%2011-0078D4?style=flat-square&logo=windows&logoColor=white)](https://github.com/thejohnd0e/PicaLum-QwenImage/releases)
-[![Stars](https://img.shields.io/github/stars/thejohnd0e/PicaLum-QwenImage?style=flat-square&logo=github&color=e3b341)](https://github.com/thejohnd0e/PicaLum-QwenImage/stargazers)
+[![Windows](https://img.shields.io/badge/windows-10%20%7C%2011-0078D4?style=flat-square&logo=windows&logoColor=white)](#install)
+[![CI](https://img.shields.io/github/actions/workflow/status/thejohnd0e/PicaLum-QwenImage/ci.yml?branch=master&style=flat-square&label=CI)](https://github.com/thejohnd0e/PicaLum-QwenImage/actions/workflows/ci.yml)
+[![Tested GPU](https://img.shields.io/badge/tested%20GPU-RTX%203060%2012%20GB-76B900?style=flat-square&logo=nvidia&logoColor=white)](#gpu-support-and-verification)
 [![Model](https://img.shields.io/badge/model-Qwen--Image--2.1-615CED?style=flat-square)](https://huggingface.co/Qwen/Qwen-Image-2.1)
-[![Benchmark](https://img.shields.io/badge/benchmark-vs%20gpt--image--2-4051B5?style=flat-square)](https://thejohnd0e.github.io/PicaLum-QwenImage/)
-[![License](https://img.shields.io/github/license/thejohnd0e/PicaLum-QwenImage?style=flat-square&color=green)](LICENSE)
+[![Code license](https://img.shields.io/badge/code%20license-MIT-green?style=flat-square)](LICENSE)
 
 <p><img src="assets/Screenshot%20-%202026-10-12%2017.44.28.png" alt="PicaLum QwenImage — Create mode with prompt, quality, aspect ratio and seed controls" width="100%"/></p>
 <p><img src="assets/Screenshot%20-%202026-10-12%2017.44.39.png" alt="PicaLum QwenImage — Edit mode with reference photos, editing instruction and prompt presets" width="100%"/></p>
@@ -24,7 +24,7 @@
 </tr>
 </table>
 
-**📊 Benchmark:** [thejohnd0e.github.io/PicaLum-QwenImage](https://thejohnd0e.github.io/PicaLum-QwenImage/) &nbsp;•&nbsp; **🛠️ Build it:** [one command](#install) &nbsp;•&nbsp; **⭐ [Star it](https://github.com/thejohnd0e/PicaLum-QwenImage/stargazers)** if it runs on your card: that is how other people with small GPUs find it.
+**🛠️ Build it:** [one command](#install) &nbsp;•&nbsp; **⭐ [Star it](https://github.com/thejohnd0e/PicaLum-QwenImage/stargazers)** if it runs on your card: that is how other people with small GPUs find it.
 
 </div>
 
@@ -202,25 +202,7 @@ How it works, and what it does and does not guarantee:
 | **Photo editing (8)** | **1** | **7** | **0** |
 | **Total** | **1** | **8** | **11** |
 
-**For editing photos it is on par with gpt-image-2**, free, private and unlimited. **For text-to-image it is not**: it follows long prompts less closely and knows less about the world (asked for a *mate*, it drew a Chinese gourd twice). Every image, prompt and verdict is on the [benchmark page](https://thejohnd0e.github.io/PicaLum-QwenImage/).
-
-<table>
-<tr>
-<td width="33%"><p align="center"><img src="docs/img/bench/in_vidriera.webp" alt="Input photo of the Solar Roast Coffee sign" width="100%"/></p><p align="center"><sub>Input: a real storefront</sub></p></td>
-<td width="33%"><p align="center"><img src="docs/img/bench/E3_cartel_texto_qwen.webp" alt="Qwen-Image-2.1 rewrote the sign to LA PORTEÑA CAFÉ" width="100%"/></p><p align="center"><sub><b>Qwen, local:</b> "LA PORTEÑA / CAFÉ", Ñ and accent included, same gold serif, logo untouched</sub></p></td>
-<td width="33%"><p align="center"><img src="docs/img/bench/E3_cartel_texto_gpt.webp" alt="gpt-image-2 rewrote the same sign" width="100%"/></p><p align="center"><sub><b>gpt-image-2:</b> equally clean. Tie.</sub></p></td>
-</tr>
-<tr>
-<td width="33%"><p align="center"><img src="docs/img/bench/in_bici.webp" alt="Input photo of a green bicycle against a wall" width="100%"/></p><p align="center"><sub>Input: "remove the background"</sub></p></td>
-<td width="33%"><p align="center"><img src="docs/img/bench/E7_bici_recorte_qwen.webp" alt="Qwen cut out the bicycle with a transparent background at its original size" width="100%"/></p><p align="center"><sub><b>Qwen wins:</b> the exact bicycle, same position and scale, ready to composite</sub></p></td>
-<td width="33%"><p align="center"><img src="docs/img/bench/E7_bici_recorte_gpt.webp" alt="gpt-image-2 redrew the bicycle larger with a transparent background" width="100%"/></p><p align="center"><sub>gpt-image-2 redraws it larger and changes the rear rack</sub></p></td>
-</tr>
-<tr>
-<td width="33%"><p align="center"><sub>Text-to-image:<br/><i>"infographic 'Cómo preparar mate', 6 numbered steps…"</i></sub></p></td>
-<td width="33%"><p align="center"><img src="docs/img/bench/C3_infografia_mate_qwen.webp" alt="Qwen infographic with misspelled small captions" width="100%"/></p><p align="center"><sub><b>Qwen loses:</b> big title perfect, small captions misspelled ("Inclinar <b>enj</b> mate"), cups instead of a mate</sub></p></td>
-<td width="33%"><p align="center"><img src="docs/img/bench/C3_infografia_mate_gpt.webp" alt="gpt-image-2 infographic with correct captions and mate icons" width="100%"/></p><p align="center"><sub><b>gpt-image-2 wins:</b> every caption right, real mate icons</sub></p></td>
-</tr>
-</table>
+**For editing photos it is on par with gpt-image-2**, free, private and unlimited. **For text-to-image it is not**: it follows long prompts less closely and knows less about the world (asked for a *mate*, it drew a Chinese gourd twice).
 
 ## How it fits in 12 GB
 

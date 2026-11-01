@@ -263,9 +263,11 @@
         </section>
 
         <section class="group">
-          <label class="label" for="cfg" data-i18n="promptAdherence"></label>
-          <input id="cfg" type="range" min="1" max="5" step="0.5" value="1" aria-label="Prompt adherence">
-          <output id="cfgVal" for="cfg">1.0</output>
+          <label class="label" for="cfg" data-i18n="cfgScale"></label>
+          <div class="cfg-controls">
+            <input id="cfg" type="range" min="1" max="5" step="0.1" value="1" aria-label="CFG Scale">
+            <input id="cfgNumber" type="number" min="1" max="5" step="0.1" value="1.0" aria-label="CFG Scale value">
+          </div>
           <p class="hint" data-i18n="cfgHint"></p>
           <label class="label" for="negative" data-i18n="negativePrompt"></label>
           <input id="negative" type="text" placeholder="what to avoid" data-i18n-ph="negativePlaceholder">

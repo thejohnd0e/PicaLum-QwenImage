@@ -111,7 +111,7 @@ struct GenOpts {
     aspect: String,
     #[arg(long)]
     seed: Option<u64>,
-    /// Classifier-free guidance: 1.0 = off, 2.5-4.0 follows the prompt more closely
+    /// CFG Scale (1.0-5.0): 1.0 = off, 2.5-4.0 follows the prompt more closely
     #[arg(long, default_value_t = 1.0)]
     cfg: f64,
     /// Negative prompt (only matters when --cfg is above 1.0)
@@ -722,6 +722,11 @@ mod tests {
         assert_eq!(select_output(&cfg, None), cfg.output_dir);
         let explicit = PathBuf::from(r"E:\one.png");
         assert_eq!(select_output(&cfg, Some(explicit.clone())), explicit);
+    }
+
+    #[test]
+    fn cfg_cli_option_rejects_non_numeric_input() {
+        assert!(Cli::try_parse_from(["qil", "generate", "a test", "--cfg", "strong"]).is_err());
     }
     #[test]
     fn doctor_inventory_line_reports_transient_memory_and_unknown_capability() {

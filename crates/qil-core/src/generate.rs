@@ -40,6 +40,15 @@ fn default_cfg() -> f64 {
     1.0
 }
 
+/// Validates the supported classifier-free guidance range before any engine I/O.
+pub fn validate_cfg(cfg: f64) -> Result<(), String> {
+    if cfg.is_finite() && (1.0..=5.0).contains(&cfg) {
+        Ok(())
+    } else {
+        Err(format!("CFG Scale must be between 1.0 and 5.0; received {cfg}"))
+    }
+}
+
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct GenResult {
@@ -387,6 +396,7 @@ pub async fn run_with_control(
     req: GenRequest,
     options: GenerateOptions<'_>,
 ) -> Result<GenResult, RunError> {
+    validate_cfg(req.cfg).map_err(RunError::Request)?;
     let client = reqwest::Client::builder()
         .connect_timeout(Duration::from_secs(20))
         .timeout(Duration::from_secs(120))
@@ -859,6 +869,24 @@ mod tests {
         .unwrap();
         assert_eq!(request.cfg, 1.0);
         assert_eq!(request.negative, "");
+    }
+
+    #[test]
+    fn cfg_validator_accepts_only_finite_values_from_one_to_five() {
+        for value in [1.0, 1.1, 5.0] {
+            assert_eq!(validate_cfg(value), Ok(()));
+        }
+        for value in [0.9, 5.1, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            assert!(validate_cfg(value).is_err(), "accepted CFG {value}");
+        }
+    }
+
+    #[test]
+    fn cfg_deserialization_rejects_non_numeric_values() {
+        let result = serde_json::from_str::<GenRequest>(
+            r#"{"mode":"text","prompt":"x","preset":"standard","aspect":"1:1","cfg":"strong"}"#,
+        );
+        assert!(result.is_err());
     }
 
     #[test]

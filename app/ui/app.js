@@ -258,14 +258,26 @@
   document.querySelectorAll("#presets [data-preset]").forEach((b) =>
     b.addEventListener("click", () => { state.preset = b.dataset.preset; localSet("preset", state.preset); renderPresets(); updateGenButton(); }));
 
-  $("cfg").value = String(Math.min(5, Math.max(1, state.cfg || 1)));
-  $("cfgVal").textContent = Number($("cfg").value).toFixed(1);
+  const initialCfg = Number.isFinite(state.cfg) ? Math.min(5, Math.max(1, state.cfg)) : 1;
+  $("cfg").value = String(initialCfg);
+  $("cfgNumber").value = initialCfg.toFixed(1);
   $("negative").value = state.negative;
-  $("cfg").addEventListener("input", () => {
-    state.cfg = Number($("cfg").value);
-    $("cfgVal").textContent = state.cfg.toFixed(1);
-    localSet("cfg", String(state.cfg));
-  });
+  function updateCfg(value, source) {
+    const number = Number(value);
+    if (value === "" || !Number.isFinite(number) || number < 1 || number > 5) {
+      if (source === "number") $("cfgNumber").setCustomValidity(t("cfgInvalid"));
+      updateGenButton();
+      return;
+    }
+    $("cfgNumber").setCustomValidity("");
+    state.cfg = number;
+    $("cfg").value = String(number);
+    $("cfgNumber").value = number.toFixed(1);
+    localSet("cfg", String(number));
+    updateGenButton();
+  }
+  $("cfg").addEventListener("input", () => updateCfg($("cfg").value, "range"));
+  $("cfgNumber").addEventListener("input", () => updateCfg($("cfgNumber").value, "number"));
   $("negative").addEventListener("input", () => {
     state.negative = $("negative").value;
     localSet("negative", state.negative);
@@ -361,6 +373,7 @@
     if (state.busy || state.verification.state === "running") { label = t("generating"); ok = false; }
     else if (state.engine === "starting") { label = t("starting"); ok = false; }
     else if (state.engine !== "ready") { label = t("engineOffBtn"); ok = false; }
+    else if (!Number.isFinite(state.cfg) || state.cfg < 1 || state.cfg > 5 || !$("cfgNumber").checkValidity()) { ok = false; }
     else if (state.mode === "photos" && state.refs.length === 0) { label = t("needPhoto"); ok = false; }
     else if (!currentPrompt()) { label = state.mode === "photos" ? t("needInstr") : t("needDesc"); ok = false; }
     else if (state.mode === "surprise") label = t("genSurprise");
@@ -437,6 +450,11 @@
   // Generate
   async function generate(count = 1) {
     if ($("genBtn").disabled || state.verification.state === "running") return;
+    if (!Number.isFinite(state.cfg) || state.cfg < 1 || state.cfg > 5 || !$("cfgNumber").checkValidity()) {
+      $("cfgNumber").setCustomValidity(t("cfgInvalid"));
+      $("cfgNumber").reportValidity();
+      return;
+    }
     setGenerateMenu(false);
     const snapshot = {
       mode: state.mode,
@@ -444,7 +462,7 @@
       images: state.mode === "photos" ? state.refs.map((r) => r.path) : [],
       preset: state.preset,
       aspect: state.aspect,
-      cfg: Number($("cfg").value),
+      cfg: state.cfg,
       negative: $("negative").value.trim(),
       surpriseAspect: state.surpriseAspect,
       theme: $("theme").value || null,

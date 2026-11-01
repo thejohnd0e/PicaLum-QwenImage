@@ -144,6 +144,9 @@ textarea:focus-visible, input:focus-visible, select:focus-visible, .ref:focus-vi
 
 .group { display: flex; flex-direction: column; gap: 8px; }
 .label { font-size: 12px; font-weight: 600; color: var(--text-muted); }
+.cfg-controls { display: grid; grid-template-columns: minmax(0, 1fr) 76px; align-items: center; gap: 10px; }
+.cfg-controls input[type="range"] { width: 100%; accent-color: var(--primary); }
+.cfg-controls input[type="number"] { width: 76px; min-height: 30px; padding: 4px 6px; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--sunken); color: var(--text); font: 12px var(--font-mono); }
 .label .muted { text-transform: none; letter-spacing: 0; font-weight: 400; }
 .label-row { display: flex; align-items: center; justify-content: space-between; }
 .hint { font-size: 12px; color: var(--text-muted); }

@@ -16,6 +16,20 @@ function loadLanguage(saved, systemLanguage) {
   return window.i18n.lang;
 }
 
+function loadTranslations() {
+  const document = { documentElement: {}, querySelectorAll: () => [] };
+  const window = { dispatchEvent: () => {} };
+  const context = {
+    window,
+    document,
+    navigator: { language: "en-US" },
+    localStorage: { getItem: () => null, setItem: () => {} },
+    Event: class Event {},
+  };
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, "..", "i18n.js"), "utf8"), context);
+  return window.i18n;
+}
+
 test("English is the default regardless of the operating system language", () => {
   assert.equal(loadLanguage(null, "ru-RU"), "en");
   assert.equal(loadLanguage(null, "es-ES"), "en");
@@ -24,4 +38,17 @@ test("English is the default regardless of the operating system language", () =>
 test("an explicitly saved optional language is restored", () => {
   assert.equal(loadLanguage("ru", "en-US"), "ru");
   assert.equal(loadLanguage("es", "en-US"), "es");
+});
+
+test("hold-to-compare mode and instruction are translated in every supported language", () => {
+  const i18n = loadTranslations();
+  const values = {
+    en: ["Hold", "Hold the pointer or Space to reveal the original"],
+    ru: ["Удерживать", "Удерживайте указатель или Space, чтобы увидеть оригинал"],
+    es: ["Mantener", "Mantén el puntero o pulsa Espacio para ver el original"],
+  };
+  for (const [language, expected] of Object.entries(values)) {
+    i18n.set(language);
+    assert.deepEqual([i18n.t("compareHold"), i18n.t("compareHoldHint")], expected);
+  }
 });

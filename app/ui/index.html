@@ -318,12 +318,13 @@
 
     <main class="stage">
       <div class="progress" id="progress"><div class="progress-fill" id="progressFill"></div></div>
-      <div class="viewer" id="viewer">
+      <div class="viewer" id="viewer" tabindex="0">
         <div class="viewer-toolbar" id="viewerToolbar" hidden>
           <div class="compare-controls" id="compareControls" role="group" aria-label="Image comparison" data-i18n-aria="compareControls">
             <button type="button" class="viewer-control" id="viewResult" data-i18n="compareResult"></button>
             <button type="button" class="viewer-control" id="viewSideBySide" data-i18n="compareSideBySide"></button>
             <button type="button" class="viewer-control" id="viewWipe" data-i18n="compareWipe"></button>
+            <button type="button" class="viewer-control" id="viewHold" data-i18n="compareHold" data-i18n-aria="compareHoldHint" aria-pressed="false"></button>
           </div>
           <div class="zoom-controls" id="zoomControls" hidden>
             <button type="button" class="viewer-control" id="zoomFit" data-i18n="fit"></button>
@@ -357,6 +358,11 @@
               <span aria-hidden="true"></span>
             </button>
             <span class="wipe-dimensions" id="wipeDims"></span>
+          </div>
+          <div class="hold-stage" id="holdStage" hidden aria-label="Hold to reveal the original">
+            <img id="holdBefore" alt="">
+            <img id="holdAfter" alt="">
+            <span class="compare-label" id="holdLabel" aria-live="polite"></span>
           </div>
           <p class="compare-note" id="compareNote" data-i18n="compareDifferentSizes" hidden></p>
         </div>

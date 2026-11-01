@@ -3,18 +3,39 @@
 
   function create({ state, getElement, fileSrc, translate }) {
     const $ = getElement;
-    const images = ["beforeShot", "afterShot", "wipeBefore", "wipeAfter"].map((id) => $(id));
+    const images = ["beforeShot", "afterShot", "wipeBefore", "wipeAfter", "holdBefore", "holdAfter"].map((id) => $(id));
     let selectedItem = null;
     let drag = null;
+    let holdingPointer = null;
+    let holdingSpace = false;
+
+    function renderHold() {
+      const showingOriginal = holdingPointer !== null || holdingSpace;
+      $("holdBefore").hidden = !showingOriginal;
+      $("holdAfter").hidden = showingOriginal;
+      $("holdLabel").textContent = translate(showingOriginal ? "before" : "after");
+    }
+
+    function releaseHold() {
+      const pointerId = holdingPointer;
+      holdingPointer = null;
+      holdingSpace = false;
+      if (pointerId !== null && $("holdStage").hasPointerCapture?.(pointerId)) {
+        $("holdStage").releasePointerCapture(pointerId);
+      }
+      renderHold();
+    }
 
     function setMode(mode) {
+      releaseHold();
       state.compareMode = mode;
       $("shot").hidden = mode !== "result";
       $("compareView").hidden = mode === "result";
       $("comparePanes").hidden = mode !== "sideBySide";
       $("wipeStage").hidden = mode !== "wipe";
+      $("holdStage").hidden = mode !== "hold";
       $("zoomControls").hidden = mode === "result";
-      const modes = { viewResult: "result", viewSideBySide: "sideBySide", viewWipe: "wipe" };
+      const modes = { viewResult: "result", viewSideBySide: "sideBySide", viewWipe: "wipe", viewHold: "hold" };
       Object.keys(modes).forEach((id) => {
         const button = $(id);
         button.setAttribute("aria-pressed", String(modes[id] === mode));
@@ -53,6 +74,9 @@
       const wipe = $("wipeStage");
       imageTransform($("wipeBefore"), wipe, state.comparePan);
       imageTransform($("wipeAfter"), wipe, state.comparePan);
+      const hold = $("holdStage");
+      imageTransform($("holdBefore"), hold, state.comparePan);
+      imageTransform($("holdAfter"), hold, state.comparePan);
       renderWipePosition();
     }
 
@@ -91,11 +115,14 @@
       $(id).hidden = !failed;
       if (id === "beforeError" || id === "afterError") {
         $("viewWipe").disabled = !$("beforeError").hidden || !$("afterError").hidden;
+        $("viewHold").disabled = !$("beforeError").hidden || !$("afterError").hidden;
+        if ($("viewHold").disabled && state.compareMode === "hold") setMode("result");
       }
     }
 
     function select(item) {
       const changed = selectedItem?.path !== item?.path;
+      if (changed) releaseHold();
       selectedItem = item;
       const eligible = QilViewer.canCompare(item);
       $("viewer").classList.toggle("has-compare", eligible);
@@ -109,6 +136,8 @@
       $("afterShot").alt = translate("after");
       $("wipeBefore").alt = translate("before");
       $("wipeAfter").alt = translate("after");
+      $("holdBefore").alt = translate("before");
+      $("holdAfter").alt = translate("after");
       if (changed) {
         state.comparePan = { x: 0.5, y: 0.5 };
         state.compareZoom = "fit";
@@ -124,8 +153,10 @@
         $("afterShot").onerror = () => setImageFailure("afterError", true);
         $("beforeShot").src = reference;
         $("wipeBefore").src = reference;
+        $("holdBefore").src = reference;
         $("afterShot").src = result;
         $("wipeAfter").src = result;
+        $("holdAfter").src = result;
         setZoom("fit");
       } else {
         setMode(state.compareMode);
@@ -133,23 +164,47 @@
     }
 
     function reset() {
+      releaseHold();
       selectedItem = null;
-      state.compareMode = "result";
+      setMode("result");
       $("viewer").classList.remove("has-compare");
       $("viewerToolbar").hidden = true;
       $("compareControls").hidden = true;
-      $("compareView").hidden = true;
       $("zoomControls").hidden = true;
     }
 
-    ["viewResult", "viewSideBySide", "viewWipe"].forEach((id) => {
+    ["viewResult", "viewSideBySide", "viewWipe", "viewHold"].forEach((id) => {
       $(id).addEventListener("click", () => {
-        const mode = { viewResult: "result", viewSideBySide: "sideBySide", viewWipe: "wipe" }[id];
+        const mode = { viewResult: "result", viewSideBySide: "sideBySide", viewWipe: "wipe", viewHold: "hold" }[id];
         if (mode === "wipe" && $("viewWipe").disabled) return;
+        if (mode === "hold" && $("viewHold").disabled) return;
         setMode(mode);
         if (mode !== "result" && mode === "sideBySide") setZoom(state.compareZoom);
       });
     });
+    $("holdStage").addEventListener("pointerdown", (event) => {
+      if (state.compareMode !== "hold" || event.button !== 0 || holdingPointer !== null) return;
+      event.preventDefault();
+      holdingPointer = event.pointerId;
+      $("holdStage").setPointerCapture(event.pointerId);
+      renderHold();
+    });
+    function endHoldPointer(event) {
+      if (holdingPointer !== null && event.pointerId === holdingPointer) releaseHold();
+    }
+    ["pointerup", "pointercancel", "lostpointercapture"].forEach((name) => $("holdStage").addEventListener(name, endHoldPointer));
+    $("viewer").addEventListener("keydown", (event) => {
+      const target = event.target;
+      const isEditable = target?.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target?.tagName);
+      if (event.key !== " " || state.compareMode !== "hold" || target !== $("viewer") || isEditable || event.repeat) return;
+      event.preventDefault();
+      holdingSpace = true;
+      renderHold();
+    });
+    $("viewer").addEventListener("keyup", (event) => {
+      if (event.key === " " && holdingSpace) releaseHold();
+    });
+    window.addEventListener("blur", releaseHold);
     $("zoomFit").addEventListener("click", () => setZoom("fit"));
     $("zoom100").addEventListener("click", () => setZoom("100%"));
     $("compareView").addEventListener("wheel", (event) => {

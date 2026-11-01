@@ -268,6 +268,7 @@ input.mono { font-family: var(--font-mono); font-size: 12px; }
 }
 .viewer img.dim { opacity: 0.35; filter: grayscale(0.4); transition: opacity 0.2s; }
 .viewer.has-compare { display: flex; flex-direction: column; align-items: stretch; justify-content: stretch; padding: 54px 20px 16px; }
+.viewer:focus-visible { outline: 2px solid var(--primary); outline-offset: -3px; }
 .viewer-toolbar { position: absolute; top: 12px; left: 16px; right: 16px; z-index: 3; display: flex; justify-content: space-between; gap: 12px; pointer-events: none; }
 .compare-controls, .zoom-controls { display: flex; gap: 4px; pointer-events: auto; }
 .viewer-control { min-height: 30px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--panel); color: var(--text-muted); font: 500 11.5px var(--font-sans); cursor: pointer; }
@@ -286,6 +287,9 @@ input.mono { font-family: var(--font-mono); font-size: 12px; }
 .compare-error { position: relative; z-index: 2; max-width: 70%; color: var(--text-muted); text-align: center; font-size: 12px; }
 .compare-note { flex-shrink: 0; color: var(--text-muted); font-size: 11px; text-align: center; }
 .wipe-stage { position: relative; flex: 1; min-height: 0; overflow: hidden; border: 1px solid var(--border); border-radius: 7px; background: repeating-conic-gradient(var(--check-a) 0 25%, var(--check-b) 0 50%) 0 0 / 16px 16px; }
+.hold-stage { position: relative; flex: 1; min-height: 0; overflow: hidden; border: 1px solid var(--border); border-radius: 7px; background: repeating-conic-gradient(var(--check-a) 0 25%, var(--check-b) 0 50%) 0 0 / 16px 16px; touch-action: none; user-select: none; }
+.hold-stage img { position: absolute; left: 0; top: 0; max-width: none; max-height: none; transform-origin: 0 0; object-fit: fill; pointer-events: none; user-select: none; -webkit-user-drag: none; }
+.hold-stage .compare-label { pointer-events: none; }
 .wipe-layer { position: absolute; inset: 0; overflow: hidden; }
 .wipe-before { clip-path: inset(0 50% 0 0); }
 .wipe-divider { position: absolute; z-index: 2; top: 0; bottom: 0; left: 50%; width: 36px; padding: 0; transform: translateX(-50%); border: 0; background: transparent; cursor: ew-resize; touch-action: none; }

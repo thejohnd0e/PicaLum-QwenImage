@@ -24,6 +24,7 @@
     const outlineCtx = rawOutline.getContext("2d");
 
     let image = null;
+    let maskHasPixels = false;
     let effectiveReady = false;
     let previewRevision = 0;
     let previewTimer = 0;
@@ -163,6 +164,11 @@
       ctx.scale(tr.scale, tr.scale);
       ctx.imageSmoothingQuality = "high";
       ctx.drawImage(image, 0, 0);
+      if (stroking) {
+        ctx.globalAlpha = OVERLAY_ALPHA;
+        ctx.drawImage(overlay, 0, 0);
+        ctx.globalAlpha = 1;
+      }
       if (effectiveReady) ctx.drawImage(effectiveOverlay, 0, 0);
       ctx.drawImage(rawOutline, 0, 0);
       ctx.restore();
@@ -184,6 +190,21 @@
     function syncOverlay() {
       const { width, height } = model.size;
       const gray = model.rasterize();
+      maskHasPixels = Editor.maskHasPixels(gray);
+      if (!maskHasPixels) {
+        octx.clearRect(0, 0, overlay.width, overlay.height);
+        outlineCtx.clearRect(0, 0, rawOutline.width, rawOutline.height);
+        effectiveReady = false;
+        maskPreview.invalidate(sourcePath);
+        $("maskPreviewStatus").hidden = true;
+        requestDraw();
+        renderControls();
+        return;
+      }
+      if (overlay.width !== width || overlay.height !== height) {
+        overlay.width = width;
+        overlay.height = height;
+      }
       const data = octx.createImageData(width, height);
       for (let i = 0; i < gray.length; i++) {
         if (gray[i]) {
@@ -239,6 +260,11 @@
       const p = clampPoint(Editor.toSource(transform(), start.x, start.y));
       if (!model.beginStroke(p.x, p.y)) return;
       stroking = true;
+      if (overlay.width !== model.size.width || overlay.height !== model.size.height) {
+        overlay.width = model.size.width;
+        overlay.height = model.size.height;
+      }
+      maskHasPixels = model.tool === "brush" || maskHasPixels;
       last = p;
       drawSegment(p, p);
       requestDraw();
@@ -403,6 +429,7 @@
       if (!path) return;
       opener = document.activeElement;
       sourcePath = path;
+      maskHasPixels = false;
       maskPreview.invalidate(path);
       $("maskPreviewStatus").hidden = true;
       previewRevision++;
@@ -434,13 +461,13 @@
         const width = img.naturalWidth;
         const height = img.naturalHeight;
         model.open({ source: path, width, height });
-        overlay.width = width;
-        overlay.height = height;
         model.setTool("brush");
         $("maskSize").max = String(Math.min(512, Math.max(64, Math.round(Math.max(width, height) / 6))));
         setBrush(Math.max(4, Math.round(Math.max(width, height) / 25)));
         fit();
-        syncOverlay();
+        // A newly opened mask is empty: defer source-sized overlay buffers and
+        // their full-image raster pass until the user actually paints.
+        requestDraw();
         $("maskLoading").hidden = true;
         $("maskBrush").focus();
       };
@@ -602,23 +629,23 @@
       $("maskBrush").addEventListener("click", () => { model.setTool("brush"); renderControls(); requestDraw(); });
       $("maskEraser").addEventListener("click", () => { model.setTool("eraser"); renderControls(); requestDraw(); });
       $("maskSize").addEventListener("input", (e) => setBrush(Number(e.target.value)));
-          $("maskFeather").addEventListener("input", () => {
-            $("maskFeatherNumber").value = $("maskFeather").value;
-            renderControls();
-            schedulePreview();
-          });
-          $("maskFeatherNumber").addEventListener("input", () => {
-            const field = $("maskFeatherNumber");
-            if (!field.checkValidity() || field.value === "") return;
-            $("maskFeather").value = String(Math.round(Number(field.value)));
-            renderControls();
-            schedulePreview();
-          });
-          $("maskFeatherMode").addEventListener("change", () => {
-            featherMode = $("maskFeatherMode").value === "bothSides" ? "bothSides" : "inward";
-            renderControls();
-            schedulePreview();
-          });
+      $("maskFeather").addEventListener("input", () => {
+        $("maskFeatherNumber").value = $("maskFeather").value;
+        renderControls();
+        schedulePreview();
+      });
+      $("maskFeatherNumber").addEventListener("input", () => {
+        const field = $("maskFeatherNumber");
+        if (!field.checkValidity() || field.value === "") return;
+        $("maskFeather").value = String(Math.round(Number(field.value)));
+        renderControls();
+        schedulePreview();
+      });
+      $("maskFeatherMode").addEventListener("change", () => {
+        featherMode = $("maskFeatherMode").value === "bothSides" ? "bothSides" : "inward";
+        renderControls();
+        schedulePreview();
+      });
       $("maskRef").addEventListener("change", onReferenceChange);
       $("maskUndoBtn").addEventListener("click", () => { if (model.undo()) syncOverlay(); });
       $("maskRedoBtn").addEventListener("click", () => { if (model.redo()) syncOverlay(); });

@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { create, viewTransform, toSource, toView, canvasBackingSize } = require("../mask-editor.js");
+const { create, viewTransform, toSource, toView, canvasBackingSize, maskHasPixels } = require("../mask-editor.js");
 
 const px = (ed, x, y) => ed.rasterize()[y * ed.size.width + x];
 const opened = (w = 40, h = 20, deps) => {
@@ -37,6 +37,13 @@ test("DPR changes backing size only, never logical mask size", () => {
   assert.deepEqual(canvasBackingSize(100, 50, 2), { width: 200, height: 100 });
   assert.deepEqual(canvasBackingSize(100, 50, 1.5), { width: 150, height: 75 });
   assert.deepEqual(opened(40, 20).size, { width: 40, height: 20 });
+});
+
+test("an untouched mask is recognized as empty before allocating full-size overlay layers", () => {
+  assert.equal(maskHasPixels(new Uint8Array(7_160_960)), false);
+  const painted = new Uint8Array(8);
+  painted[6] = 255;
+  assert.equal(maskHasPixels(painted), true);
 });
 
 test("brush paints white, eraser restores black", () => {

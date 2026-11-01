@@ -27,6 +27,10 @@
     return { width: Math.round(viewWidth * dpr), height: Math.round(viewHeight * dpr) };
   }
 
+  function maskHasPixels(mask) {
+    return mask.some((value) => value !== 0);
+  }
+
   function clamp(v, lo, hi) {
     return Math.min(hi, Math.max(lo, v));
   }
@@ -224,7 +228,7 @@
     };
   }
 
-  const api = Object.freeze({ create, viewTransform, toSource, toView, canvasBackingSize });
+  const api = Object.freeze({ create, viewTransform, toSource, toView, canvasBackingSize, maskHasPixels });
   if (typeof module === "object" && module.exports) module.exports = api;
   else window.QilMaskEditor = api;
 })();

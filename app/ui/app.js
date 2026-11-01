@@ -58,6 +58,7 @@
 
   const maskUi = window.QilMaskEditorUi.create({
     getElement: $,
+    invoke,
     translate: t,
     fileSrc,
     notify,

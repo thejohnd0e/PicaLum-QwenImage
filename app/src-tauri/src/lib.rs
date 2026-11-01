@@ -4,6 +4,7 @@ use std::sync::{Mutex, RwLock};
 use std::time::Duration;
 
 use base64::Engine as _;
+use qil_core::masked_edit::{effective_mask, MaskFeatherMode, MaskedEditOptions};
 use qil_core::prompt_presets::PromptPresetFile;
 use qil_core::{
     engine, generate, gpu, prompt_presets, setup, surprise, verification, Config, Engine,
@@ -398,6 +399,47 @@ async fn generate_masked_edit(
 }
 
 #[tauri::command]
+async fn preview_mask_feather(
+    mask_png_base64: String,
+    feather_px: u32,
+    feather_mode: MaskFeatherMode,
+) -> Result<String, String> {
+    if feather_px > qil_core::masked_edit::MAX_FEATHER_PX {
+        return Err(format!(
+            "feather radius must be at most {}px",
+            qil_core::masked_edit::MAX_FEATHER_PX
+        ));
+    }
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(mask_png_base64.as_bytes())
+        .map_err(|error| format!("The mask is not valid base64: {error}"))?;
+    let png = tokio::task::spawn_blocking(move || -> Result<Vec<u8>, String> {
+        let mask = image::load_from_memory(&bytes)
+            .map_err(|error| format!("Cannot decode mask PNG: {error}"))?
+            .to_luma8();
+        if u64::from(mask.width()) * u64::from(mask.height()) > qil_core::masked_run::MAX_PIXELS {
+            return Err("The mask dimensions exceed the supported limit.".into());
+        }
+        let effective = effective_mask(
+            &mask,
+            &MaskedEditOptions {
+                feather_px,
+                feather_mode,
+            },
+        )
+        .map_err(|error| error.to_string())?;
+        let mut output = std::io::Cursor::new(Vec::new());
+        effective
+            .write_to(&mut output, image::ImageFormat::Png)
+            .map_err(|error| format!("Cannot encode effective mask: {error}"))?;
+        Ok(output.into_inner())
+    })
+    .await
+    .map_err(|error| error.to_string())??;
+    Ok(base64::engine::general_purpose::STANDARD.encode(png))
+}
+
+#[tauri::command]
 async fn cancel(settings: State<'_, Settings>) -> Result<(), String> {
     let active = settings
         .active_generation
@@ -604,6 +646,7 @@ pub fn run() {
             engine_stop,
             generate,
             generate_masked_edit,
+            preview_mask_feather,
             cancel,
             gpu_verification_start,
             gpu_verification_cancel,
@@ -643,6 +686,24 @@ mod tests {
     fn output_folder_validation_rejects_empty_and_relative_paths() {
         assert!(validated_output_dir("").is_err());
         assert!(validated_output_dir("relative/output").is_err());
+    }
+
+    #[tokio::test]
+    async fn mask_preview_returns_the_shared_effective_mask_as_png() {
+        let mask = image::GrayImage::from_raw(7, 1, vec![0, 0, 0, 255, 0, 0, 0]).unwrap();
+        let mut input = std::io::Cursor::new(Vec::new());
+        mask.write_to(&mut input, image::ImageFormat::Png).unwrap();
+        let encoded = base64::engine::general_purpose::STANDARD.encode(input.into_inner());
+        let preview = preview_mask_feather(encoded, 1, MaskFeatherMode::BothSides)
+            .await
+            .unwrap();
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(preview)
+            .unwrap();
+        let effective = image::load_from_memory(&bytes).unwrap().to_luma8();
+        assert!(effective.get_pixel(2, 0)[0] > 0);
+        assert!(effective.get_pixel(4, 0)[0] > 0);
+        assert_eq!(effective.dimensions(), (7, 1));
     }
 
     #[cfg(windows)]

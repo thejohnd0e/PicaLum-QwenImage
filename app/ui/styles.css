@@ -496,6 +496,10 @@ input.mono { font-family: var(--font-mono); font-size: 12px; }
 .mask-tool[aria-pressed="true"]::before { content: "\2713"; }
 .mask-range { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); }
 .mask-range input[type="range"] { width: 110px; }
+.mask-feather-number { width: 58px; min-height: 28px; padding: 3px 5px; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--sunken); color: var(--text); font: 12px var(--font-mono); }
+.mask-range select { max-width: 170px; min-height: 28px; padding: 3px 6px; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--sunken); color: var(--text); }
+.mask-gaussian-warning { color: var(--warning); }
+.mask-preview-status { min-height: 1em; }
 .mask-range .mono { min-width: 42px; }
 .mask-stage { position: relative; flex: 1 1 auto; min-height: 220px; height: min(56vh, 620px); border: 1px solid var(--border); border-radius: var(--r); background: var(--sunken); overflow: hidden; }
 .mask-stage canvas { display: block; cursor: crosshair; touch-action: none; }

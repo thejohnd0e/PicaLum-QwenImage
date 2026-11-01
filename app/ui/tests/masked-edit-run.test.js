@@ -37,6 +37,7 @@ const payload = {
   maskPngBase64: "AAAA",
   instruction: "Make the saddle brown.",
   featherPx: 8,
+  featherMode: "bothSides",
 };
 const backendResult = { path: "C:\\out\\masked.png", seed: 42, width: 1560, height: 1040, seconds: 12.5 };
 
@@ -57,6 +58,7 @@ test("the request carries the exact source, mask, instruction, preset, seed and 
       preset: "standard",
       seed: 777,
       featherPx: 8,
+      featherMode: "bothSides",
       cfg: 2.3,
       denoisingStrength: 0.75,
       references: ["C:\\photos\\ref.jpg"],

@@ -18,8 +18,16 @@
     const octx = overlay.getContext("2d");
     const canvas = $("maskCanvas");
     const ctx = canvas.getContext("2d");
+    const effectiveOverlay = document.createElement("canvas");
+    const effectiveCtx = effectiveOverlay.getContext("2d");
+    const rawOutline = document.createElement("canvas");
+    const outlineCtx = rawOutline.getContext("2d");
 
     let image = null;
+    let effectiveReady = false;
+    let previewRevision = 0;
+    let previewTimer = 0;
+    let featherMode = "inward";
     let sourcePath = null;
     let view = { zoom: 1, panX: 0, panY: 0, w: 1, h: 1 };
     let hover = null; // CSS coords of the pointer, for the brush ring
@@ -31,6 +39,96 @@
     let opener = null;
     let observer = null;
     let autoText = ""; // instruction text we filled in for a chosen reference
+
+    const maskPreview = window.QilMaskPreview.create({
+      invoke: (args) => deps.invoke("preview_mask_feather", args),
+      onBusy(busy) {
+        $("maskPreviewStatus").hidden = !busy;
+        if (busy) $("maskPreviewStatus").textContent = t("maskPreviewBusy");
+      },
+      onResult(base64) {
+        const result = new Image();
+        result.onload = () => {
+          if (!isOpen() || !image || result.naturalWidth !== model.size.width || result.naturalHeight !== model.size.height) return;
+          effectiveOverlay.width = result.naturalWidth;
+          effectiveOverlay.height = result.naturalHeight;
+          effectiveCtx.clearRect(0, 0, result.naturalWidth, result.naturalHeight);
+          effectiveCtx.drawImage(result, 0, 0);
+          const pixels = effectiveCtx.getImageData(0, 0, result.naturalWidth, result.naturalHeight);
+          for (let i = 0; i < pixels.data.length; i += 4) {
+            const alpha = pixels.data[i];
+            pixels.data[i] = 235;
+            pixels.data[i + 1] = 48;
+            pixels.data[i + 2] = 48;
+            pixels.data[i + 3] = Math.round(alpha * OVERLAY_ALPHA);
+          }
+          effectiveCtx.putImageData(pixels, 0, 0);
+          effectiveReady = true;
+          $("maskPreviewStatus").hidden = true;
+          requestDraw();
+        };
+        result.src = `data:image/png;base64,${base64}`;
+      },
+      onError() {
+        effectiveReady = false;
+        $("maskPreviewStatus").hidden = false;
+        $("maskPreviewStatus").textContent = t("maskPreviewFailed");
+        requestDraw();
+      },
+    });
+
+    async function requestPreview() {
+      if (!isOpen() || !model.size || generating) return;
+      const revision = ++previewRevision;
+      const source = sourcePath;
+      effectiveReady = false;
+      requestDraw();
+      try {
+        const maskPngBase64 = toBase64(await encodePng(model.rasterize(), model.size.width, model.size.height));
+        if (revision !== previewRevision || source !== sourcePath || !isOpen()) return;
+        await maskPreview.request({
+          maskPngBase64,
+          featherPx: Number($("maskFeather").value),
+          featherMode,
+          revision,
+          source,
+        });
+      } catch {
+        if (revision === previewRevision) {
+          effectiveReady = false;
+          $("maskPreviewStatus").hidden = false;
+          $("maskPreviewStatus").textContent = t("maskPreviewFailed");
+          requestDraw();
+        }
+      }
+    }
+
+    function schedulePreview() {
+      if (previewTimer) clearTimeout(previewTimer);
+      previewTimer = setTimeout(() => {
+        previewTimer = 0;
+        void requestPreview();
+      }, 120);
+    }
+
+    function updateRawOutline(gray, width, height) {
+      rawOutline.width = width;
+      rawOutline.height = height;
+      const data = outlineCtx.createImageData(width, height);
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const i = y * width + x;
+          if (!gray[i]) continue;
+          if (x === 0 || y === 0 || x === width - 1 || y === height - 1 || !gray[i - 1] || !gray[i + 1] || !gray[i - width] || !gray[i + width]) {
+            data.data[i * 4] = 235;
+            data.data[i * 4 + 1] = 48;
+            data.data[i * 4 + 2] = 48;
+            data.data[i * 4 + 3] = 230;
+          }
+        }
+      }
+      outlineCtx.putImageData(data, 0, 0);
+    }
 
     const isOpen = () => !$("maskBackdrop").hidden;
     const transform = () =>
@@ -65,8 +163,8 @@
       ctx.scale(tr.scale, tr.scale);
       ctx.imageSmoothingQuality = "high";
       ctx.drawImage(image, 0, 0);
-      ctx.globalAlpha = OVERLAY_ALPHA;
-      ctx.drawImage(overlay, 0, 0);
+      if (effectiveReady) ctx.drawImage(effectiveOverlay, 0, 0);
+      ctx.drawImage(rawOutline, 0, 0);
       ctx.restore();
       if (hover && !generating) {
         ctx.beginPath();
@@ -96,8 +194,10 @@
         }
       }
       octx.putImageData(data, 0, 0);
+      updateRawOutline(gray, width, height);
       requestDraw();
       renderControls();
+      schedulePreview();
     }
 
     function localPoint(event) {
@@ -142,6 +242,7 @@
       last = p;
       drawSegment(p, p);
       requestDraw();
+      schedulePreview();
     }
 
     function onPointerMove(event) {
@@ -154,6 +255,7 @@
         model.addPoint(p.x, p.y);
         drawSegment(last, p);
         last = p;
+        schedulePreview();
       }
       requestDraw();
     }
@@ -219,7 +321,9 @@
       $("maskEraser").setAttribute("aria-pressed", String(model.tool === "eraser"));
       $("maskSizeValue").textContent = `${model.brushSize} px`;
       $("maskFeatherValue").textContent = `${$("maskFeather").value} px`;
-      for (const id of ["maskBrush", "maskEraser", "maskUndoBtn", "maskRedoBtn", "maskClearBtn", "maskFitBtn", "maskSize", "maskFeather", "maskDenoisingStrength", "maskDenoisingStrengthNumber", "maskInstruction", "maskRef"]) {
+      $("maskFeatherNumber").value = $("maskFeather").value;
+      $("maskGaussianWarning").hidden = featherMode !== "bothSides";
+      for (const id of ["maskBrush", "maskEraser", "maskUndoBtn", "maskRedoBtn", "maskClearBtn", "maskFitBtn", "maskSize", "maskFeather", "maskFeatherNumber", "maskFeatherMode", "maskDenoisingStrength", "maskDenoisingStrengthNumber", "maskInstruction", "maskRef"]) {
         $(id).disabled = locked;
       }
       $("maskGenerate").disabled = locked;
@@ -299,6 +403,10 @@
       if (!path) return;
       opener = document.activeElement;
       sourcePath = path;
+      maskPreview.invalidate(path);
+      $("maskPreviewStatus").hidden = true;
+      previewRevision++;
+      effectiveReady = false;
       image = null;
       generating = false;
       hover = null;
@@ -349,6 +457,11 @@
       model.close();
       image = null;
       sourcePath = null;
+      previewRevision++;
+      maskPreview.invalidate(null);
+      if (previewTimer) clearTimeout(previewTimer);
+      previewTimer = 0;
+      effectiveReady = false;
       generating = false;
       $("maskBackdrop").hidden = true;
       if (opener && opener.isConnected) opener.focus();
@@ -410,7 +523,8 @@
           sourcePath,
           maskPngBase64,
           instruction,
-          featherPx: Number($("maskFeather").value),
+              featherPx: Number($("maskFeather").value),
+              featherMode,
           denoisingStrength: Number($("maskDenoisingStrength").value),
           references: $("maskRef").value ? [$("maskRef").value] : [],
         });
@@ -488,7 +602,23 @@
       $("maskBrush").addEventListener("click", () => { model.setTool("brush"); renderControls(); requestDraw(); });
       $("maskEraser").addEventListener("click", () => { model.setTool("eraser"); renderControls(); requestDraw(); });
       $("maskSize").addEventListener("input", (e) => setBrush(Number(e.target.value)));
-      $("maskFeather").addEventListener("input", renderControls);
+          $("maskFeather").addEventListener("input", () => {
+            $("maskFeatherNumber").value = $("maskFeather").value;
+            renderControls();
+            schedulePreview();
+          });
+          $("maskFeatherNumber").addEventListener("input", () => {
+            const field = $("maskFeatherNumber");
+            if (!field.checkValidity() || field.value === "") return;
+            $("maskFeather").value = String(Math.round(Number(field.value)));
+            renderControls();
+            schedulePreview();
+          });
+          $("maskFeatherMode").addEventListener("change", () => {
+            featherMode = $("maskFeatherMode").value === "bothSides" ? "bothSides" : "inward";
+            renderControls();
+            schedulePreview();
+          });
       $("maskRef").addEventListener("change", onReferenceChange);
       $("maskUndoBtn").addEventListener("click", () => { if (model.undo()) syncOverlay(); });
       $("maskRedoBtn").addEventListener("click", () => { if (model.redo()) syncOverlay(); });

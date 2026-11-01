@@ -107,7 +107,8 @@
         <button type="button" class="btn btn-sm mask-tool" id="maskBrush" aria-pressed="true" data-i18n="maskBrush"></button>
         <button type="button" class="btn btn-sm mask-tool" id="maskEraser" aria-pressed="false" data-i18n="maskEraser"></button>
         <label class="mask-range"><span data-i18n="maskSize"></span> <input type="range" id="maskSize" min="1" max="200" value="32"> <span class="mono muted" id="maskSizeValue"></span></label>
-        <label class="mask-range"><span data-i18n="maskFeather"></span> <input type="range" id="maskFeather" min="0" max="64" value="8"> <span class="mono muted" id="maskFeatherValue"></span></label>
+        <label class="mask-range"><span data-i18n="maskFeather"></span> <input type="range" id="maskFeather" min="0" max="64" step="1" value="8"> <input class="mask-feather-number" id="maskFeatherNumber" type="number" min="0" max="64" step="1" value="8" aria-label="Mask feather radius"></label>
+        <label class="mask-range"><span data-i18n="maskFeatherMode"></span> <select id="maskFeatherMode"><option value="inward" data-i18n="maskFeatherInward"></option><option value="bothSides" data-i18n="maskFeatherBothSides"></option></select></label>
         <label class="mask-range"><span data-i18n="denoisingStrength"></span> <input type="range" id="maskDenoisingStrength" min="0.10" max="1.00" step="0.01" value="0.75"></label>
         <input class="denoising-number" id="maskDenoisingStrengthNumber" type="number" min="0.10" max="1.00" step="0.01" value="0.75" data-i18n-aria="denoisingStrength">
         <span class="mask-toolbar-gap"></span>
@@ -121,6 +122,8 @@
         <p class="mask-loading muted" id="maskLoading" data-i18n="maskLoading"></p>
       </div>
       <p class="hint" id="maskCanvasHint" data-i18n="maskCanvasHint"></p>
+      <p class="hint mask-gaussian-warning" id="maskGaussianWarning" data-i18n="maskGaussianWarning" hidden></p>
+      <p class="mono muted mask-preview-status" id="maskPreviewStatus" role="status" aria-live="polite" hidden></p>
       <div class="mask-ref" id="maskRefRow" hidden>
         <label class="label" for="maskRef" data-i18n="maskRefLabel"></label>
         <select id="maskRef"></select>
@@ -417,7 +420,8 @@
   <script src="prompt-presets.js"></script>
   <script src="viewer.js"></script>
   <script src="viewer-controller.js"></script>
-  <script src="mask-editor.js"></script>
+      <script src="mask-editor.js"></script>
+      <script src="mask-preview.js"></script>
   <script src="mask-editor-ui.js"></script>
   <script src="masked-edit-run.js"></script>
   <script src="verification-controller.js"></script>

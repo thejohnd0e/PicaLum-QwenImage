@@ -8,7 +8,7 @@
   function create(deps) {
     const { invoke, state, translate: t, hooks } = deps;
 
-    async function run({ sourcePath, maskPngBase64, instruction, featherPx, denoisingStrength = state.denoisingStrength, references = [] }) {
+    async function run({ sourcePath, maskPngBase64, instruction, featherPx, featherMode = "inward", denoisingStrength = state.denoisingStrength, references = [] }) {
       if (state.busy) return { error: t("maskBusy") };
       const seed = deps.lockedSeed();
       const preset = state.preset;
@@ -20,7 +20,7 @@
       hooks.begin();
       try {
         const r = await invoke("generate_masked_edit", {
-          args: { sourcePath, maskPngBase64, instruction, preset, seed, featherPx, cfg, denoisingStrength: strength, references },
+          args: { sourcePath, maskPngBase64, instruction, preset, seed, featherPx, featherMode, cfg, denoisingStrength: strength, references },
         });
         const item = {
           path: r.path,
@@ -30,6 +30,7 @@
             preset,
             cfg,
             denoisingStrength: strength,
+            featherMode,
             seed: r.seed,
             width: r.width,
             height: r.height,

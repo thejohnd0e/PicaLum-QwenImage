@@ -284,6 +284,7 @@ qil setup
 qil generate "a red fox asleep in the snow" --preset draft
 qil generate "a mate gourd sticker" --transparent --aspect 1:1
 qil edit "Change the scene to a snowy night" -i street.jpg --preset standard
+qil edit "Warm up the lighting" -i portrait.jpg --denoising-strength 0.55
 qil edit "Put the dog from <image2> next to the bike in <image1>" -i bike.jpg -i dog.jpg
 qil surprise --theme capybaras
 qil config --output-dir "D:\Qwen Images"
@@ -299,7 +300,7 @@ qil bench --only E3_cartel_texto --only E7_bici_recorte --preset max
 | `qil doctor` | Inspect GPU, installation and verification status; does not install or generate |
 | `qil setup` | `--profile balanced\|compact` selects manually; omission chooses from VRAM. `--gpu-uuid GPU-…` selects a stable GPU identity. `--models-dir PATH` reuses / relocates weights; `--runtime-dir PATH` chooses the runtime directory. Saves configuration |
 | `qil generate "PROMPT"` | Create one image; accepts shared options and `--transparent` for native RGBA |
-| `qil edit "INSTRUCTION" -i PHOTO` | Edit / combine up to 10 references. Repeat `-i` / `--image` in order; the first is the canvas. Accepts shared options |
+| `qil edit "INSTRUCTION" -i PHOTO` | Edit / combine up to 10 references. Repeat `-i` / `--image` in order; the first is the canvas. Accepts shared options and `--denoising-strength 0.10..1.00` (default `0.75`) |
 | `qil surprise` | Create one local idea, with optional `--theme "THEME"`. Accepts shared quality, seed and output options; uses the idea's generated aspect instead of `--aspect` |
 | `qil config` | Show configuration as JSON. `--profile balanced\|compact`, `--models-dir PATH` and `--output-dir PATH` update settings; do not move old files or download models |
 | `qil bench` | Run a JSON suite and record images, timing, sampling speed, dimensions, seed, profile, GPU and peak VRAM in `results.json` |
@@ -309,6 +310,8 @@ Shared options for `generate`, `edit` and `surprise`:
 - `-p, --preset draft|standard|max`: quality, default **standard**; not a saved editing prompt.
 - `-a, --aspect RATIO`: one of the seven ratios, default `1:1`, used for text creation. Edit takes its canvas from the first photo; Surprise uses the generated idea's ratio.
 - `--seed NUMBER`: fixed seed; omitted means random.
+- `--cfg NUMBER`: CFG Scale from `1.0` to `5.0`; default `1.0` (off). The desktop slider/number field uses `0.1` steps. Higher values guide the image more strongly toward the prompt. The desktop also offers an optional negative prompt.
+- `--denoising-strength NUMBER` (`qil edit` only): `0.10`–`1.00`, default `0.75`; the desktop control uses `0.01` steps. Lower values generally preserve more of the first source photo; `1.00` uses the historic fully-noised edit path. This changes the initial latent, not a pixel blend, and the visual effect is nonlinear.
 - `-o, --out PATH`: output folder or `.png` filename for this run; otherwise the configured folder. Existing files receive a unique name rather than being overwritten.
 - `--keep-engine`: keep a CLI-started engine running for subsequent calls. Otherwise it stops when the command exits. Externally started engines are reused and not stopped by the CLI.
 
@@ -332,7 +335,7 @@ The bundled PyTorch proves the selected GPU's architecture before model weights 
 | Standard | 30 | About 1.6 MP | 1280 px |
 | Max | 40 | Official native 2K aspect presets; 2048 × 2048 at `1:1` | 1536 px |
 
-Create dimensions depend on aspect ratio. Regular editing gets its canvas from the first reference and can change its pixel dimensions. Area editing resamples and composites back to the source size.
+Create dimensions depend on aspect ratio. Regular editing gets its canvas from the first reference and can change its pixel dimensions. Denoising is available only in desktop Photos and for CLI `qil edit`; legacy requests without the setting retain `1.00`. The new interactive and CLI edit default is `0.75`.
 
 ### Local files and metadata
 
@@ -346,7 +349,7 @@ Create dimensions depend on aspect ratio. Regular editing gets its canvas from t
 
 ### Mask-guided editing
 
-The model does not receive a native mask. It sees the source marked with a red outline and tint, plus an instruction to edit there. The app resamples the model result to the source size and composites it with the source, preserving every pixel outside the painted mask. Edge softness feathers inward; it never expands the edited area. Anything the model draws outside the mask is discarded. Only the final composite enters history; the original is unchanged and the mask is not saved for later sessions.
+The model does not receive a native mask. It sees the source marked with a red outline and tint, plus an instruction to edit there; the denoising init latent comes from a separate clean copy of the source. The app resamples the model result to the source size and composites it with the source. **Inward** feathering (default) keeps zero-mask pixels unchanged and never expands the editable area. **Gaussian · both sides** blurs the mask in both directions and can affect pixels outside the painted selection; its radius is the Gaussian sigma in source-image pixels (support extends to about three sigma), not the width of an inward transition. Radius `0` uses the raw mask. The colored preview uses the same effective-mask calculation as the final composite, while the raw mask is sent for processing. Denoising controls how much the model regenerates the photo; feathering controls only the boundary blend. Only the final composite enters history; the original is unchanged and the mask is not saved for later sessions.
 
 The prototype in `bench/mask_proto` compared this with sending the mask as another reference (the outline leaked into results) and with instructions alone (neighbouring objects changed). This is application-level compositing, not native Qwen inpainting. The feature was tested on a few photos and seeds on RTX 3060 12 GB, Balanced; Compact is untested for area editing.
 

@@ -18,8 +18,8 @@ use serde_json::json;
 
 use crate::config::DIT;
 use crate::generate::{
-    preset, remove_temp_file, run_error_text, run_with_control, should_save_json,
-    unique_output_path, GenRequest, GenResult, GenerateOptions,
+    remove_temp_file, run_error_text, run_with_control, should_save_json, unique_output_path,
+    GenRequest, GenResult, GenerateOptions,
 };
 use crate::masked_edit::{
     composite, validate_mask, MaskFeatherMode, MaskedEditError, MaskedEditOptions,
@@ -44,6 +44,7 @@ pub struct MaskedEditRequest {
     pub mask_png: Vec<u8>,
     pub instruction: String,
     pub preset: String,
+    pub steps: Option<u32>,
     pub seed: Option<u64>,
     pub feather_px: u32,
     pub feather_mode: MaskFeatherMode,
@@ -111,6 +112,9 @@ pub fn build_gen_request(
         images,
         preset: req.preset.clone(),
         aspect: "1:1".into(), // ignored: the canvas comes from the first image
+        steps: req.steps,
+        width: None,
+        height: None,
         seed: req.seed,
         transparent: false,
         cfg: req.cfg,
@@ -389,7 +393,6 @@ async fn run_in_temp(
     .map_err(|e| RunError::Request(e.to_string()))??;
     let (png_bytes, width, height) = final_png;
 
-    let p = preset(&req.preset);
     let instruction = req.instruction.trim().to_string();
     let extra = format!(
         "Mode: {MODE}\nGuidance: {STRATEGY_ID}\nFeather: {}px ({:?})\nReferences: {}",
@@ -447,7 +450,7 @@ async fn run_in_temp(
         height,
         seconds: started.elapsed().as_secs_f64(),
         sample_seconds: raw.sample_seconds,
-        steps: p.steps,
+        steps: raw.steps,
         prompt: instruction.clone(),
         mode: MODE.into(),
         preset: req.preset.clone(),
@@ -523,6 +526,7 @@ mod tests {
             mask_png: mask_png(mask),
             instruction: "Make it red.".into(),
             preset: "draft".into(),
+            steps: None,
             seed: Some(1),
             feather_px: 4,
             feather_mode: MaskFeatherMode::Inward,
@@ -554,12 +558,14 @@ mod tests {
         let mask = rect_mask(8, 8, 1, 1, 4, 4);
         let mut req = request(dir.path(), &src, &mask);
         req.cfg = 2.3;
+        req.steps = Some(17);
         let marked = dir.path().join("marked.png");
         let clean = Path::new("clean.png");
         let plain = build_gen_request(&req, &marked, clean);
         assert_eq!(plain.images, vec![marked.to_string_lossy().to_string()]);
         assert_eq!(plain.mode, MODE);
         assert_eq!(plain.cfg, 2.3);
+        assert_eq!(plain.steps, Some(17));
         assert_eq!(plain.denoising_strength, 0.75);
         assert_eq!(plain.init_image_path.as_deref(), Some("clean.png"));
 

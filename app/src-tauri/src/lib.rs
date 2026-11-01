@@ -315,6 +315,13 @@ async fn generate(
         })
 }
 
+#[tauri::command]
+fn generation_settings_resolve(
+    request: GenRequest,
+) -> Result<qil_core::generate::ResolvedGenerationSettings, String> {
+    generate::resolve_generation_settings(&request)
+}
+
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct MaskedEditArgs {
@@ -323,6 +330,8 @@ struct MaskedEditArgs {
     mask_png_base64: String,
     instruction: String,
     preset: String,
+    #[serde(default)]
+    steps: Option<u32>,
     seed: Option<u64>,
     feather_px: u32,
     #[serde(default)]
@@ -386,6 +395,7 @@ async fn generate_masked_edit(
         mask_png,
         instruction: args.instruction,
         preset: args.preset,
+        steps: args.steps,
         seed: args.seed,
         feather_px: args.feather_px,
         feather_mode: args.feather_mode,
@@ -645,6 +655,7 @@ pub fn run() {
             engine_start,
             engine_stop,
             generate,
+            generation_settings_resolve,
             generate_masked_edit,
             preview_mask_feather,
             cancel,
@@ -680,6 +691,21 @@ mod tests {
     #[test]
     fn application_version_matches_cargo_package_version() {
         assert_eq!(app_version(), env!("CARGO_PKG_VERSION"));
+    }
+
+    #[test]
+    fn generation_settings_command_uses_the_shared_core_resolution() {
+        let request: GenRequest = serde_json::from_str(
+            r#"{"mode":"text","prompt":"x","preset":"standard","aspect":"3:4","steps":17,"width":512,"height":512}"#,
+        ).unwrap();
+        assert_eq!(
+            generation_settings_resolve(request),
+            Ok(generate::ResolvedGenerationSettings {
+                steps: 17,
+                width: 512,
+                height: 512,
+            })
+        );
     }
 
     #[test]

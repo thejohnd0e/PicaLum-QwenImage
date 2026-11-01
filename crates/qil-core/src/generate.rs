@@ -25,6 +25,14 @@ pub struct GenRequest {
     pub images: Vec<String>,
     pub preset: String, // "draft" | "standard" | "max"
     pub aspect: String, // "16:9", ...
+    /// Optional step override; absent requests preserve their preset defaults.
+    #[serde(default)]
+    pub steps: Option<u32>,
+    /// Optional text-to-image canvas overrides; supplied together.
+    #[serde(default)]
+    pub width: Option<u32>,
+    #[serde(default)]
+    pub height: Option<u32>,
     pub seed: Option<u64>,
     #[serde(default)]
     pub transparent: bool,
@@ -153,6 +161,72 @@ pub struct Preset {
     pub steps: u32,
     pub megapixels: f64,
     pub edit_res: u32,
+}
+
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolvedGenerationSettings {
+    pub steps: u32,
+    pub width: u32,
+    pub height: u32,
+}
+
+pub const MIN_MANUAL_DIMENSION: u32 = 256;
+pub const MAX_MANUAL_DIMENSION: u32 = 4096;
+pub const MAX_MANUAL_PIXELS: u64 = 4_500_000;
+
+/// Resolves preset and manual values before any engine I/O. Photo modes may
+/// override steps, but their canvas remains derived from the source image.
+pub fn resolve_generation_settings(req: &GenRequest) -> Result<ResolvedGenerationSettings, String> {
+    let preset = preset(&req.preset);
+    let steps = req.steps.unwrap_or(preset.steps);
+    if !(1..=100).contains(&steps) {
+        return Err("Steps must be between 1 and 100.".into());
+    }
+
+    if req.width.is_some() != req.height.is_some() {
+        return Err("Width and Height must be provided together.".into());
+    }
+    let (width, height) = if let (Some(width), Some(height)) = (req.width, req.height) {
+        if req.mode == "photos" || req.mode == "masked-edit" {
+            return Err("Photo-edit dimensions are determined by the source image.".into());
+        }
+        for (name, value) in [("Width", width), ("Height", height)] {
+            if !(MIN_MANUAL_DIMENSION..=MAX_MANUAL_DIMENSION).contains(&value) {
+                return Err(format!("{name} must be between {MIN_MANUAL_DIMENSION} and {MAX_MANUAL_DIMENSION} pixels."));
+            }
+            if value % 32 != 0 {
+                return Err(format!("{name} must be a multiple of 32 pixels."));
+            }
+        }
+        if u64::from(width) * u64::from(height) > MAX_MANUAL_PIXELS {
+            return Err(format!(
+                "Image area must not exceed {MAX_MANUAL_PIXELS} pixels."
+            ));
+        }
+        (width, height)
+    } else if req.mode == "photos" && !req.images.is_empty() {
+        resolve_photo_dimensions(&req.images[0], &req.preset)?
+    } else {
+        dims(&req.aspect, preset.megapixels)
+    };
+
+    Ok(ResolvedGenerationSettings {
+        steps,
+        width,
+        height,
+    })
+}
+
+/// Returns the actual model canvas for a source-driven photo edit.
+pub fn resolve_photo_dimensions(
+    source_path: &str,
+    preset_name: &str,
+) -> Result<(u32, u32), String> {
+    let (width, height) = image::image_dimensions(source_path)
+        .map_err(|error| format!("Cannot read source image dimensions: {error}"))?;
+    let resolution = preset(preset_name).edit_res;
+    Ok(edit_canvas_size(width, height, resolution))
 }
 
 pub fn preset(name: &str) -> Preset {
@@ -638,6 +712,7 @@ async fn run_inner(req: GenRequest, context: &mut RunContext<'_>) -> Result<GenR
     let on_progress = context.on_progress;
     let control = &mut context.control;
     let t0 = Instant::now();
+    let resolved = resolve_generation_settings(&req).map_err(RunError::Request)?;
     let p = preset(&req.preset);
     let base = cfg.base_url();
     let emit = |stage, value, max| on_progress(Progress { stage, value, max });
@@ -683,7 +758,7 @@ async fn run_inner(req: GenRequest, context: &mut RunContext<'_>) -> Result<GenR
     } else {
         req.prompt.clone()
     };
-    let (w, h) = dims(&req.aspect, p.megapixels);
+    let (w, h) = (resolved.width, resolved.height);
     let seed = req
         .seed
         .unwrap_or_else(|| rand::thread_rng().gen_range(0..(1u64 << 48)));
@@ -692,7 +767,7 @@ async fn run_inner(req: GenRequest, context: &mut RunContext<'_>) -> Result<GenR
         refs: &refs,
         width: w,
         height: h,
-        steps: p.steps,
+        steps: resolved.steps,
         seed,
         edit_res: p.edit_res,
         encoder: cfg.profile.encoder().name,
@@ -910,7 +985,7 @@ async fn run_inner(req: GenRequest, context: &mut RunContext<'_>) -> Result<GenR
         &GenerationMetadata {
             prompt: &req.prompt,
             seed,
-            steps: p.steps,
+            steps: resolved.steps,
             width,
             height,
             preset: &req.preset,
@@ -958,7 +1033,7 @@ async fn run_inner(req: GenRequest, context: &mut RunContext<'_>) -> Result<GenR
         height,
         seconds: t0.elapsed().as_secs_f64(),
         sample_seconds: sample_secs,
-        steps: p.steps,
+        steps: resolved.steps,
         prompt: req.prompt.clone(),
         mode: req.mode.clone(),
         preset: req.preset.clone(),
@@ -966,7 +1041,7 @@ async fn run_inner(req: GenRequest, context: &mut RunContext<'_>) -> Result<GenR
     let round1 = |x: f64| (x * 10.0).round() / 10.0;
     let meta = json!({
         "prompt": req.prompt, "mode": req.mode, "preset": req.preset, "aspect": req.aspect,
-        "seed": seed, "steps": p.steps, "width": width, "height": height, "transparent": req.transparent,
+        "seed": seed, "steps": resolved.steps, "width": width, "height": height, "transparent": req.transparent,
         "references": req.images, "seconds": round1(result.seconds), "sampleSeconds": round1(sample_secs),
         "model": "Qwen-Image-2.1", "dit": DIT.name, "encoder": cfg.profile.encoder().name,
         "app": concat!("PicaLum QwenImage ", env!("CARGO_PKG_VERSION")),
@@ -1034,6 +1109,134 @@ mod tests {
         .unwrap();
         assert_eq!(request.cfg, 1.0);
         assert_eq!(request.negative, "");
+    }
+
+    #[test]
+    fn generation_settings_resolve_legacy_presets_and_explicit_pixels() {
+        let legacy: GenRequest = serde_json::from_str(
+            r#"{"mode":"text","prompt":"x","preset":"standard","aspect":"1:1"}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            resolve_generation_settings(&legacy).unwrap(),
+            ResolvedGenerationSettings {
+                steps: 30,
+                width: 1280,
+                height: 1280,
+            }
+        );
+
+        let draft: GenRequest =
+            serde_json::from_str(r#"{"mode":"text","prompt":"x","preset":"draft","aspect":"1:1"}"#)
+                .unwrap();
+        assert_eq!(
+            resolve_generation_settings(&draft).unwrap(),
+            ResolvedGenerationSettings {
+                steps: 20,
+                width: 1024,
+                height: 1024,
+            }
+        );
+
+        let max_sizes = [
+            ("1:1", 2048, 2048),
+            ("4:3", 2400, 1792),
+            ("3:4", 1792, 2400),
+            ("3:2", 2528, 1696),
+            ("2:3", 1696, 2528),
+            ("16:9", 2752, 1536),
+            ("9:16", 1536, 2752),
+        ];
+        for (aspect, width, height) in max_sizes {
+            let request = GenRequest {
+                preset: "max".into(),
+                aspect: aspect.into(),
+                ..legacy.clone()
+            };
+            assert_eq!(
+                resolve_generation_settings(&request).unwrap(),
+                ResolvedGenerationSettings {
+                    steps: 40,
+                    width,
+                    height,
+                },
+                "{aspect}"
+            );
+        }
+
+        let custom: GenRequest = serde_json::from_str(
+            r#"{"mode":"text","prompt":"x","preset":"standard","aspect":"3:4","steps":17,"width":256,"height":256}"#,
+        ).unwrap();
+        assert_eq!(
+            resolve_generation_settings(&custom).unwrap(),
+            ResolvedGenerationSettings {
+                steps: 17,
+                width: 256,
+                height: 256,
+            }
+        );
+    }
+
+    #[test]
+    fn generation_settings_reject_invalid_custom_values_and_photo_dimensions() {
+        let base = r#"{"mode":"text","prompt":"x","preset":"standard","aspect":"1:1"}"#;
+        for (field, value) in [
+            ("steps", "0"),
+            ("steps", "101"),
+            ("width", "255"),
+            ("width", "4097"),
+            ("height", "257"),
+            ("height", "0"),
+        ] {
+            let json = base.replace("}", &format!(",\"{field}\":{value}}}"));
+            let request: GenRequest = serde_json::from_str(&json).unwrap();
+            assert!(
+                resolve_generation_settings(&request).is_err(),
+                "accepted {field}={value}"
+            );
+        }
+        let partial: GenRequest = serde_json::from_str(
+            r#"{"mode":"text","prompt":"x","preset":"standard","aspect":"1:1","width":512}"#,
+        )
+        .unwrap();
+        assert!(resolve_generation_settings(&partial).is_err());
+        let unaligned: GenRequest = serde_json::from_str(
+            r#"{"mode":"text","prompt":"x","preset":"standard","aspect":"1:1","width":257,"height":256}"#,
+        ).unwrap();
+        assert!(resolve_generation_settings(&unaligned).is_err());
+        let oversized: GenRequest = serde_json::from_str(
+            r#"{"mode":"text","prompt":"x","preset":"standard","aspect":"1:1","width":4096,"height":2048}"#,
+        ).unwrap();
+        assert!(resolve_generation_settings(&oversized).is_err());
+
+        let photo: GenRequest = serde_json::from_str(
+            r#"{"mode":"photos","prompt":"x","images":["source.png"],"preset":"standard","aspect":"1:1","steps":12,"width":512,"height":512}"#,
+        ).unwrap();
+        assert!(resolve_generation_settings(&photo).is_err());
+        let photo_steps: GenRequest = serde_json::from_str(
+            r#"{"mode":"photos","prompt":"x","images":[],"preset":"standard","aspect":"1:1","steps":12}"#,
+        ).unwrap();
+        assert_eq!(resolve_generation_settings(&photo_steps).unwrap().steps, 12);
+    }
+
+    #[test]
+    fn photo_settings_report_the_source_derived_engine_canvas() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("source.png");
+        image::RgbaImage::new(1600, 1200).save(&path).unwrap();
+        let request: GenRequest = serde_json::from_value(json!({
+            "mode": "photos", "prompt": "edit", "images": [path],
+            "preset": "standard", "aspect": "1:1", "steps": 12
+        }))
+        .unwrap();
+        assert_eq!(
+            resolve_generation_settings(&request).unwrap(),
+            ResolvedGenerationSettings {
+                steps: 12,
+                width: 1472,
+                height: 1120,
+            }
+        );
     }
 
     #[test]

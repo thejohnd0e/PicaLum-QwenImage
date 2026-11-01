@@ -61,12 +61,12 @@
 
 **Interfaces:** Add `#[serde(default)] steps: Option<u32>`, `width: Option<u32>`, `height: Option<u32>` to `GenRequest` (camelCase unchanged). Add serializable `ResolvedGenerationSettings { steps: u32, width: u32, height: u32 }`. Define `resolve_generation_settings(req: &GenRequest) -> Result<ResolvedGenerationSettings, String>` for text/Surprise canvas settings. It consumes the existing `preset()` and `dims()` and confirmed bounds; never writes a `custom` preset string. Width/height are an atomic optional pair. Photo resolution remains source-derived.
 
-- [ ] Add Rust tests: legacy JSON resolves Standard 1:1 to current `dims("1:1", 1.6)` and 30 steps; Draft and all seven Max dimensions match existing calculations; `steps=17,width=256,height=256` resolves exactly; one missing axis, <256, >4096, non-multiple-of-32, steps outside 1–100, and area >4,500,000 reject; explicit pixel size is not recomputed from `aspect`; legacy no-override graphs remain unchanged. Add photo tests: steps override applies, width/height overrides reject with a clear unsupported-mode error rather than silently ignoring them.
-- [ ] Run `cargo test -p qil-core --lib`; confirm the new assertions fail for missing override/resolution support.
-- [ ] Implement the resolver and invoke validation before upload, WebSocket or prompt submission. Use effective steps in graph, `GenResult.steps`, sidecar JSON and embedded PNG metadata; audit every use of `p.steps`, including timeout/progress calculations. Use explicit text dimensions in the latent. Keep the no-override photo encoder/init-latent path unchanged.
-- [ ] Add `steps: Option<u32>` to `MaskedEditRequest` and optional Serde-defaulted steps to Tauri masked-edit arguments; forward it in `build_gen_request`. Set `None` in existing Rust constructors (CLI, verification, benches/tests as found by compiler). Use effective steps in masked result metadata; leave its final source-sized composite and feather behavior unchanged.
-- [ ] Expose `resolve_generation_settings` through a read-only Tauri command `generation_settings_resolve(request: GenRequest) -> Result<ResolvedGenerationSettings, String>` using the same resolver; register it with the invoke handler. This command must not start the engine. Photo UI uses source dimensions plus existing core `edit_canvas_size`, exposed via this command or a separate narrowly typed read-only command; do not reproduce that calculation in JS.
-- [ ] Run `cargo test --workspace` (ignored network test stays ignored), confirm override/legacy/masked metadata tests pass. Commit core/backend and constructor changes.
+- [x] Add Rust tests: legacy requests, Draft and all seven Max dimensions, exact 256 custom size, invalid steps/dimensions/area, no aspect recomputation, photo steps and photo dimension rejection.
+- [x] Run `cargo test -p qil-core --lib`; first compile failed because resolver API was absent; after implementation focused tests pass.
+- [x] Implement resolver/validation before uploads, use effective steps in graph/results/JSON/PNG metadata and manual T2I dimensions in latent; preserve photo path and report source-derived canvas dimensions.
+- [x] Add optional steps to masked request/Tauri args; forward through core graph and use actual resolved step count in masked output metadata. Update CLI/verification constructors; composite/feather behavior unchanged.
+- [x] Expose and register read-only `generation_settings_resolve`; add Tauri test proving shared core resolution.
+- [x] Run `cargo test --workspace` (145 core + 5 app + 5 CLI passed, one ignored real-download test); commit core/backend and constructor changes.
 
 ## Task 3: Build the compact quality controller
 

@@ -219,7 +219,7 @@
       $("maskEraser").setAttribute("aria-pressed", String(model.tool === "eraser"));
       $("maskSizeValue").textContent = `${model.brushSize} px`;
       $("maskFeatherValue").textContent = `${$("maskFeather").value} px`;
-      for (const id of ["maskBrush", "maskEraser", "maskUndoBtn", "maskRedoBtn", "maskClearBtn", "maskFitBtn", "maskSize", "maskFeather", "maskInstruction", "maskRef"]) {
+      for (const id of ["maskBrush", "maskEraser", "maskUndoBtn", "maskRedoBtn", "maskClearBtn", "maskFitBtn", "maskSize", "maskFeather", "maskDenoisingStrength", "maskDenoisingStrengthNumber", "maskInstruction", "maskRef"]) {
         $(id).disabled = locked;
       }
       $("maskGenerate").disabled = locked;
@@ -306,6 +306,9 @@
       $("maskDiscard").hidden = true;
       $("maskBackdrop").hidden = false;
       $("maskInstruction").value = deps.getPrompt();
+      const denoisingStrength = Number(deps.getDenoisingStrength?.() ?? 0.75);
+      $("maskDenoisingStrength").value = denoisingStrength.toFixed(2);
+      $("maskDenoisingStrengthNumber").value = denoisingStrength.toFixed(2);
       autoText = "";
       $("maskRef").value = "";
       renderReferences();
@@ -379,6 +382,10 @@
         showError(t("maskEmpty"));
         return;
       }
+      if (!$("maskDenoisingStrengthNumber").checkValidity()) {
+        $("maskDenoisingStrengthNumber").reportValidity();
+        return;
+      }
       const blocked = deps.canRun();
       if (blocked) {
         showError(blocked);
@@ -404,6 +411,7 @@
           maskPngBase64,
           instruction,
           featherPx: Number($("maskFeather").value),
+          denoisingStrength: Number($("maskDenoisingStrength").value),
           references: $("maskRef").value ? [$("maskRef").value] : [],
         });
       } catch (error) {

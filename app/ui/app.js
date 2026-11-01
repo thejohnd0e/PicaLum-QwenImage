@@ -17,6 +17,7 @@
     preset: localGet("preset", "standard"),
     aspect: localGet("aspect", "1:1"),
     cfg: Number(localGet("cfg", "1")),
+    denoisingStrength: Number(localGet("denoisingStrength", "0.75")),
     negative: localGet("negative", ""),
     surpriseAspect: "random",
     refs: [],
@@ -62,6 +63,8 @@
     notify,
     getSourcePath: () => state.refs[0]?.path || null,
     getPrompt: () => $("promptPhotos").value.trim(),
+    getCfg: () => state.cfg,
+    getDenoisingStrength: () => state.denoisingStrength,
     getReferences: () => state.refs.slice(1).map((r) => ({ path: r.path, name: `${r.orig || r.path}`.split(/[\\/]/).pop() })),
     canRun: () => (state.busy || state.verification.state === "running" ? t("maskBusy") : state.engine !== "ready" ? t("maskEngineOff") : null),
     submit: (payload) => runMaskedEdit(payload),
@@ -278,6 +281,33 @@
   }
   $("cfg").addEventListener("input", () => updateCfg($("cfg").value, "range"));
   $("cfgNumber").addEventListener("input", () => updateCfg($("cfgNumber").value, "number"));
+  function updateDenoisingStrength(value, source, target = "main") {
+    const range = $(target === "main" ? "denoisingStrength" : "maskDenoisingStrength");
+    const numeric = $(target === "main" ? "denoisingStrengthNumber" : "maskDenoisingStrengthNumber");
+    const number = Number(value);
+    if (value === "" || !Number.isFinite(number) || number < 0.1 || number > 1) {
+      if (source === "number") numeric.setCustomValidity(t("denoisingInvalid"));
+      return;
+    }
+    numeric.setCustomValidity("");
+    range.value = number.toFixed(2);
+    numeric.value = number.toFixed(2);
+    if (target === "main") {
+      state.denoisingStrength = number;
+      localSet("denoisingStrength", String(number));
+      updateGenButton();
+    }
+  }
+  const initialDenoisingStrength = Number.isFinite(state.denoisingStrength) ? Math.min(1, Math.max(0.1, state.denoisingStrength)) : 0.75;
+  state.denoisingStrength = initialDenoisingStrength;
+  $("denoisingStrength").value = initialDenoisingStrength.toFixed(2);
+  $("denoisingStrengthNumber").value = initialDenoisingStrength.toFixed(2);
+  $("maskDenoisingStrength").value = initialDenoisingStrength.toFixed(2);
+  $("maskDenoisingStrengthNumber").value = initialDenoisingStrength.toFixed(2);
+  $("denoisingStrength").addEventListener("input", () => updateDenoisingStrength($("denoisingStrength").value, "range"));
+  $("denoisingStrengthNumber").addEventListener("input", () => updateDenoisingStrength($("denoisingStrengthNumber").value, "number"));
+  $("maskDenoisingStrength").addEventListener("input", () => updateDenoisingStrength($("maskDenoisingStrength").value, "range", "mask"));
+  $("maskDenoisingStrengthNumber").addEventListener("input", () => updateDenoisingStrength($("maskDenoisingStrengthNumber").value, "number", "mask"));
   $("negative").addEventListener("input", () => {
     state.negative = $("negative").value;
     localSet("negative", state.negative);
@@ -374,6 +404,7 @@
     else if (state.engine === "starting") { label = t("starting"); ok = false; }
     else if (state.engine !== "ready") { label = t("engineOffBtn"); ok = false; }
     else if (!Number.isFinite(state.cfg) || state.cfg < 1 || state.cfg > 5 || !$("cfgNumber").checkValidity()) { ok = false; }
+    else if (state.mode === "photos" && !$("denoisingStrengthNumber").checkValidity()) { ok = false; }
     else if (state.mode === "photos" && state.refs.length === 0) { label = t("needPhoto"); ok = false; }
     else if (!currentPrompt()) { label = state.mode === "photos" ? t("needInstr") : t("needDesc"); ok = false; }
     else if (state.mode === "surprise") label = t("genSurprise");
@@ -455,6 +486,10 @@
       $("cfgNumber").reportValidity();
       return;
     }
+    if (state.mode === "photos" && !$("denoisingStrengthNumber").checkValidity()) {
+      $("denoisingStrengthNumber").reportValidity();
+      return;
+    }
     setGenerateMenu(false);
     const snapshot = {
       mode: state.mode,
@@ -463,6 +498,7 @@
       preset: state.preset,
       aspect: state.aspect,
       cfg: state.cfg,
+      denoisingStrength: Number($("denoisingStrength").value),
       negative: $("negative").value.trim(),
       surpriseAspect: state.surpriseAspect,
       theme: $("theme").value || null,
@@ -501,6 +537,7 @@
         transparent: snapshot.transparent,
         cfg: snapshot.cfg,
         negative: snapshot.negative,
+        denoisingStrength: snapshot.mode === "photos" ? snapshot.denoisingStrength : 1.0,
       };
     }
 
@@ -569,6 +606,7 @@
     state,
     translate: t,
     lockedSeed: () => ($("seedLock").checked && $("seed").value ? Number($("seed").value) : null),
+    getCfg: () => state.cfg,
     hooks: {
       begin() {
         hideNotice();

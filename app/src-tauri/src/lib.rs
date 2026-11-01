@@ -324,9 +324,20 @@ struct MaskedEditArgs {
     preset: String,
     seed: Option<u64>,
     feather_px: u32,
+    #[serde(default = "default_mask_cfg")]
+    cfg: f64,
+    #[serde(default = "default_mask_denoising_strength")]
+    denoising_strength: f64,
     /// Extra photos whose content goes into the painted area (`<image2>`, ...).
     #[serde(default)]
     references: Vec<String>,
+}
+
+fn default_mask_cfg() -> f64 {
+    1.0
+}
+fn default_mask_denoising_strength() -> f64 {
+    1.0
 }
 
 /// Mask-guided edit of one image. Shares the generation lock, cancel channel and
@@ -374,6 +385,8 @@ async fn generate_masked_edit(
         preset: args.preset,
         seed: args.seed,
         feather_px: args.feather_px,
+        cfg: args.cfg,
+        denoising_strength: args.denoising_strength,
         references: args.references.into_iter().map(PathBuf::from).collect(),
     };
     qil_core::masked_run::run_masked_edit(req, options)

@@ -8,6 +8,8 @@ function setup({ invoke, lockedSeed = null } = {}) {
   const state = {
     busy: false,
     preset: "standard",
+    cfg: 2.3,
+    denoisingStrength: 0.75,
     generationRun: 0,
     stopRequested: false,
     history: [],
@@ -19,6 +21,7 @@ function setup({ invoke, lockedSeed = null } = {}) {
     state,
     translate: (key) => strings[key] ?? key,
     lockedSeed: () => lockedSeed,
+    getCfg: () => state.cfg,
     hooks: {
       begin: () => { calls.begin += 1; },
       end: () => { calls.end += 1; },
@@ -54,6 +57,8 @@ test("the request carries the exact source, mask, instruction, preset, seed and 
       preset: "standard",
       seed: 777,
       featherPx: 8,
+      cfg: 2.3,
+      denoisingStrength: 0.75,
       references: ["C:\\photos\\ref.jpg"],
     },
   }]]);
@@ -66,6 +71,8 @@ test("an unlocked seed is sent as null and references default to none", async ()
   await flow.run(payload);
 
   assert.equal(sent.seed, null);
+  assert.equal(sent.cfg, 2.3);
+  assert.equal(sent.denoisingStrength, 0.75);
   assert.deepEqual(sent.references, []);
 });
 

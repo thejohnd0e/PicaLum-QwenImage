@@ -44,6 +44,8 @@ pub struct MaskedEditRequest {
     pub preset: String,
     pub seed: Option<u64>,
     pub feather_px: u32,
+    pub cfg: f64,
+    pub denoising_strength: f64,
     /// Optional reference photos for the content to place in the area; they are
     /// sent after the marked source, so the first one is `<image2>`.
     pub references: Vec<PathBuf>,
@@ -108,10 +110,10 @@ pub fn build_gen_request(
         aspect: "1:1".into(), // ignored: the canvas comes from the first image
         seed: req.seed,
         transparent: false,
-        cfg: 1.0,
+        cfg: req.cfg,
         negative: String::new(),
         init_image_path: Some(clean_path.to_string_lossy().into_owned()),
-        denoising_strength: 1.0,
+        denoising_strength: req.denoising_strength,
     }
 }
 
@@ -136,6 +138,8 @@ pub fn prepare(req: &MaskedEditRequest) -> Result<Prepared, String> {
     if req.feather_px > crate::masked_edit::MAX_FEATHER_PX {
         return Err(MaskedEditError::InvalidFeather(req.feather_px).to_string());
     }
+    crate::generate::validate_cfg(req.cfg)?;
+    crate::generate::validate_denoising_strength(req.denoising_strength)?;
     if req.references.len() > MAX_REFERENCES {
         return Err(format!(
             "At most {MAX_REFERENCES} reference photos are supported."
@@ -388,9 +392,9 @@ async fn run_in_temp(
             width,
             height,
             preset: &req.preset,
-            cfg: 1.0,
+            cfg: req.cfg,
             negative: "",
-            denoising_strength: 1.0,
+            denoising_strength: req.denoising_strength,
             extra: Some(&extra),
         },
     )?;
@@ -507,6 +511,8 @@ mod tests {
             preset: "draft".into(),
             seed: Some(1),
             feather_px: 4,
+            cfg: 1.0,
+            denoising_strength: 0.75,
             references: vec![],
         }
     }
@@ -532,11 +538,15 @@ mod tests {
         let src = gradient(8, 8);
         let mask = rect_mask(8, 8, 1, 1, 4, 4);
         let mut req = request(dir.path(), &src, &mask);
+        req.cfg = 2.3;
         let marked = dir.path().join("marked.png");
         let clean = Path::new("clean.png");
         let plain = build_gen_request(&req, &marked, clean);
         assert_eq!(plain.images, vec![marked.to_string_lossy().to_string()]);
         assert_eq!(plain.mode, MODE);
+        assert_eq!(plain.cfg, 2.3);
+        assert_eq!(plain.denoising_strength, 0.75);
+        assert_eq!(plain.init_image_path.as_deref(), Some("clean.png"));
 
         req.references = vec![dir.path().join("a.png"), dir.path().join("b.png")];
         let with_refs = build_gen_request(&req, &marked, clean);

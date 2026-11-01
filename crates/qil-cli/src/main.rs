@@ -55,6 +55,9 @@ enum Cmd {
         instruction: String,
         #[arg(short, long = "image", required = true, num_args = 1)]
         images: Vec<PathBuf>,
+        /// Img2img denoising strength, from 0.10 to 1.00
+        #[arg(long, default_value_t = 0.75, value_parser = parse_denoising_strength)]
+        denoising_strength: f64,
         #[command(flatten)]
         opts: GenOpts,
     },
@@ -181,6 +184,7 @@ async fn run(cli: Cli) -> Result<(), String> {
         Cmd::Edit {
             instruction,
             images,
+            denoising_strength,
             opts,
         } => {
             if images.len() > generate::MAX_REFS {
@@ -194,7 +198,8 @@ async fn run(cli: Cli) -> Result<(), String> {
                         .map_err(|e| format!("{}: {e}", p.display()))
                 })
                 .collect::<Result<Vec<_>, _>>()?;
-            let req = request("photos", instruction, imgs, &opts, false);
+            let mut req = request("photos", instruction, imgs, &opts, false);
+            req.denoising_strength = denoising_strength;
             one_shot(&cfg, req, &opts).await
         }
         Cmd::Surprise { theme, opts } => {
@@ -277,6 +282,14 @@ fn request(
         init_image_path: None,
         denoising_strength: 1.0,
     }
+}
+
+fn parse_denoising_strength(value: &str) -> Result<f64, String> {
+    let strength: f64 = value
+        .parse()
+        .map_err(|_| "denoising strength must be a number".to_string())?;
+    qil_core::generate::validate_denoising_strength(strength)?;
+    Ok(strength)
 }
 
 fn select_output(cfg: &Config, explicit: Option<PathBuf>) -> PathBuf {
@@ -731,6 +744,39 @@ mod tests {
     #[test]
     fn cfg_cli_option_rejects_non_numeric_input() {
         assert!(Cli::try_parse_from(["qil", "generate", "a test", "--cfg", "strong"]).is_err());
+    }
+
+    #[test]
+    fn edit_denoising_strength_has_bounded_cli_values_and_a_point_seven_five_default() {
+        let cli =
+            Cli::try_parse_from(["qil", "edit", "--image", "source.png", "change it"]).unwrap();
+        let Cmd::Edit {
+            denoising_strength, ..
+        } = cli.cmd
+        else {
+            panic!("expected edit command")
+        };
+        assert_eq!(denoising_strength, 0.75);
+        assert!(Cli::try_parse_from([
+            "qil",
+            "edit",
+            "--image",
+            "source.png",
+            "change it",
+            "--denoising-strength",
+            "0.10"
+        ])
+        .is_ok());
+        assert!(Cli::try_parse_from([
+            "qil",
+            "edit",
+            "--image",
+            "source.png",
+            "change it",
+            "--denoising-strength",
+            "1.01"
+        ])
+        .is_err());
     }
     #[test]
     fn doctor_inventory_line_reports_transient_memory_and_unknown_capability() {

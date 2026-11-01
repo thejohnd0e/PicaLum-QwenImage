@@ -108,6 +108,8 @@
         <button type="button" class="btn btn-sm mask-tool" id="maskEraser" aria-pressed="false" data-i18n="maskEraser"></button>
         <label class="mask-range"><span data-i18n="maskSize"></span> <input type="range" id="maskSize" min="1" max="200" value="32"> <span class="mono muted" id="maskSizeValue"></span></label>
         <label class="mask-range"><span data-i18n="maskFeather"></span> <input type="range" id="maskFeather" min="0" max="64" value="8"> <span class="mono muted" id="maskFeatherValue"></span></label>
+        <label class="mask-range"><span data-i18n="denoisingStrength"></span> <input type="range" id="maskDenoisingStrength" min="0.10" max="1.00" step="0.01" value="0.75"></label>
+        <input class="denoising-number" id="maskDenoisingStrengthNumber" type="number" min="0.10" max="1.00" step="0.01" value="0.75" data-i18n-aria="denoisingStrength">
         <span class="mask-toolbar-gap"></span>
         <button type="button" class="btn btn-sm" id="maskUndoBtn" data-i18n="maskUndo"></button>
         <button type="button" class="btn btn-sm" id="maskRedoBtn" data-i18n="maskRedo"></button>
@@ -268,8 +270,16 @@
             <input id="cfg" type="range" min="1" max="5" step="0.1" value="1" aria-label="CFG Scale">
             <input id="cfgNumber" type="number" min="1" max="5" step="0.1" value="1.0" aria-label="CFG Scale value">
           </div>
-          <p class="hint" data-i18n="cfgHint"></p>
-          <label class="label" for="negative" data-i18n="negativePrompt"></label>
+              <p class="hint" data-i18n="cfgHint"></p>
+              <div class="photo-denoising" id="photoDenoisingControls" data-show="photos" hidden>
+                <label class="label" for="denoisingStrength" data-i18n="denoisingStrength"></label>
+                <div class="cfg-controls">
+                  <input id="denoisingStrength" type="range" min="0.10" max="1.00" step="0.01" value="0.75" aria-label="Denoising Strength">
+                  <input id="denoisingStrengthNumber" type="number" min="0.10" max="1.00" step="0.01" value="0.75" aria-label="Denoising Strength value">
+                </div>
+                <p class="hint" data-i18n="denoisingHint"></p>
+              </div>
+              <label class="label" for="negative" data-i18n="negativePrompt"></label>
           <input id="negative" type="text" placeholder="what to avoid" data-i18n-ph="negativePlaceholder">
         </section>
 

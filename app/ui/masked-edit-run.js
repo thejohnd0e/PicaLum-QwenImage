@@ -8,17 +8,19 @@
   function create(deps) {
     const { invoke, state, translate: t, hooks } = deps;
 
-    async function run({ sourcePath, maskPngBase64, instruction, featherPx, references = [] }) {
+    async function run({ sourcePath, maskPngBase64, instruction, featherPx, denoisingStrength = state.denoisingStrength, references = [] }) {
       if (state.busy) return { error: t("maskBusy") };
       const seed = deps.lockedSeed();
       const preset = state.preset;
+      const cfg = deps.getCfg();
+      const strength = Number(denoisingStrength ?? 0.75);
       const runId = ++state.generationRun;
       state.stopRequested = false;
       state.busy = true;
       hooks.begin();
       try {
         const r = await invoke("generate_masked_edit", {
-          args: { sourcePath, maskPngBase64, instruction, preset, seed, featherPx, references },
+          args: { sourcePath, maskPngBase64, instruction, preset, seed, featherPx, cfg, denoisingStrength: strength, references },
         });
         const item = {
           path: r.path,
@@ -26,6 +28,8 @@
             mode: "masked-edit",
             prompt: instruction,
             preset,
+            cfg,
+            denoisingStrength: strength,
             seed: r.seed,
             width: r.width,
             height: r.height,

@@ -40,6 +40,8 @@ pub fn request() -> GenRequest {
         transparent: false,
         cfg: 1.0,
         negative: String::new(),
+        init_image_path: None,
+        denoising_strength: 1.0,
     }
 }
 

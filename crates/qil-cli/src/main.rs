@@ -274,6 +274,8 @@ fn request(
         transparent,
         cfg: o.cfg,
         negative: o.negative.clone(),
+        init_image_path: None,
+        denoising_strength: 1.0,
     }
 }
 
@@ -658,6 +660,8 @@ async fn bench(
             transparent: false, // suite prompts already carry the RGBA wording where needed
             cfg: 1.0,
             negative: String::new(),
+            init_image_path: None,
+            denoising_strength: 1.0,
         };
         let running = Arc::new(AtomicBool::new(true));
         let peak = Arc::new(AtomicU32::new(0));

@@ -89,7 +89,11 @@ pub fn guidance_prompt(instruction: &str, with_references: bool) -> String {
 
 /// The engine request for a prepared edit: the marked source first, then the
 /// references.
-pub fn build_gen_request(req: &MaskedEditRequest, marked_path: &Path) -> GenRequest {
+pub fn build_gen_request(
+    req: &MaskedEditRequest,
+    marked_path: &Path,
+    clean_path: &Path,
+) -> GenRequest {
     let mut images = vec![marked_path.to_string_lossy().into_owned()];
     images.extend(
         req.references
@@ -106,6 +110,8 @@ pub fn build_gen_request(req: &MaskedEditRequest, marked_path: &Path) -> GenRequ
         transparent: false,
         cfg: 1.0,
         negative: String::new(),
+        init_image_path: Some(clean_path.to_string_lossy().into_owned()),
+        denoising_strength: 1.0,
     }
 }
 
@@ -329,9 +335,19 @@ async fn run_in_temp(
     tokio::fs::write(&marked_path, marked_png)
         .await
         .map_err(|e| RunError::Request(format!("Cannot write the temporary image: {e}")))?;
+    let clean_path = temp.join("clean.png");
+    let clean_png = tokio::task::spawn_blocking({
+        let clean = source.clone();
+        move || encode_png(&clean)
+    })
+    .await
+    .map_err(|e| RunError::Request(e.to_string()))??;
+    tokio::fs::write(&clean_path, clean_png)
+        .await
+        .map_err(|e| RunError::Request(format!("Cannot write the clean init image: {e}")))?;
 
     let raw_path = temp.join("raw.png");
-    let gen_req = build_gen_request(req, &marked_path);
+    let gen_req = build_gen_request(req, &marked_path, &clean_path);
     let raw = run_with_control(
         gen_req,
         GenerateOptions {
@@ -372,6 +388,9 @@ async fn run_in_temp(
             width,
             height,
             preset: &req.preset,
+            cfg: 1.0,
+            negative: "",
+            denoising_strength: 1.0,
             extra: Some(&extra),
         },
     )?;
@@ -514,12 +533,13 @@ mod tests {
         let mask = rect_mask(8, 8, 1, 1, 4, 4);
         let mut req = request(dir.path(), &src, &mask);
         let marked = dir.path().join("marked.png");
-        let plain = build_gen_request(&req, &marked);
+        let clean = Path::new("clean.png");
+        let plain = build_gen_request(&req, &marked, clean);
         assert_eq!(plain.images, vec![marked.to_string_lossy().to_string()]);
         assert_eq!(plain.mode, MODE);
 
         req.references = vec![dir.path().join("a.png"), dir.path().join("b.png")];
-        let with_refs = build_gen_request(&req, &marked);
+        let with_refs = build_gen_request(&req, &marked, clean);
         assert_eq!(with_refs.images.len(), 3);
         assert_eq!(with_refs.images[0], marked.to_string_lossy());
         assert!(with_refs.images[1].ends_with("a.png") && with_refs.images[2].ends_with("b.png"));

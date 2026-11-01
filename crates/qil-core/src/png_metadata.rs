@@ -9,6 +9,9 @@ pub(crate) struct GenerationMetadata<'a> {
     pub width: u32,
     pub height: u32,
     pub preset: &'a str,
+    pub cfg: f64,
+    pub negative: &'a str,
+    pub denoising_strength: f64,
     /// Extra "Key: value" lines appended to the parameters text (e.g. masked-edit details).
     pub extra: Option<&'a str>,
 }
@@ -22,8 +25,9 @@ pub(crate) fn embed_generation_metadata(
     }
 
     let mut parameters = format!(
-        "{}\n\nModel: Qwen-Image-2.1\nSeed: {}\nSteps: {}\nSize: {}x{}\nPreset: {}",
-        meta.prompt, meta.seed, meta.steps, meta.width, meta.height, meta.preset
+        "{}\n\nModel: Qwen-Image-2.1\nSeed: {}\nSteps: {}\nSize: {}x{}\nPreset: {}\nCFG Scale: {}\nNegative prompt: {}\nDenoising strength: {:.2}",
+        meta.prompt, meta.seed, meta.steps, meta.width, meta.height, meta.preset,
+        meta.cfg, meta.negative, meta.denoising_strength
     );
     if let Some(extra) = meta.extra {
         parameters.push('\n');
@@ -156,6 +160,9 @@ mod tests {
             width: 1024,
             height: 768,
             preset: "standard",
+            cfg: 1.0,
+            negative: "",
+            denoising_strength: 1.0,
             extra: None,
         };
         let embedded = embed_generation_metadata(&original, &meta).unwrap();
@@ -185,7 +192,7 @@ mod tests {
         assert_eq!(payloads[0].0, "parameters");
         assert!(payloads[0].1.contains("кот & <луна>"));
         assert!(payloads[0].1.contains(
-            "Model: Qwen-Image-2.1\nSeed: 42\nSteps: 30\nSize: 1024x768\nPreset: standard"
+            "Model: Qwen-Image-2.1\nSeed: 42\nSteps: 30\nSize: 1024x768\nPreset: standard\nCFG Scale: 1\nNegative prompt: \nDenoising strength: 1.00"
         ));
         assert_eq!(payloads[1].0, "XML:com.adobe.xmp");
         assert!(payloads[1].1.contains("кот &amp; &lt;луна&gt;"));
@@ -203,6 +210,9 @@ mod tests {
                 width: 1,
                 height: 1,
                 preset: "draft",
+                cfg: 1.0,
+                negative: "",
+                denoising_strength: 1.0,
                 extra: None
             }
         )
@@ -216,6 +226,9 @@ mod tests {
                 width: 1,
                 height: 1,
                 preset: "draft",
+                cfg: 1.0,
+                negative: "",
+                denoising_strength: 1.0,
                 extra: None
             }
         )

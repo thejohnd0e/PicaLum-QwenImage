@@ -34,6 +34,12 @@ pub struct GenRequest {
     /// Negative prompt; only has an effect when `cfg` is above 1.0.
     #[serde(default)]
     pub negative: String,
+    /// Image used as the clean init latent; defaults to the first photo reference.
+    #[serde(default)]
+    pub init_image_path: Option<String>,
+    /// Img2img strength. Ignored outside photo-edit modes.
+    #[serde(default = "default_denoising_strength")]
+    pub denoising_strength: f64,
 }
 
 fn default_cfg() -> f64 {
@@ -45,8 +51,78 @@ pub fn validate_cfg(cfg: f64) -> Result<(), String> {
     if cfg.is_finite() && (1.0..=5.0).contains(&cfg) {
         Ok(())
     } else {
-        Err(format!("CFG Scale must be between 1.0 and 5.0; received {cfg}"))
+        Err(format!(
+            "CFG Scale must be between 1.0 and 5.0; received {cfg}"
+        ))
     }
+}
+
+fn default_denoising_strength() -> f64 {
+    1.0
+}
+
+pub fn validate_denoising_strength(strength: f64) -> Result<(), String> {
+    if strength.is_finite() && (0.10..=1.0).contains(&strength) {
+        Ok(())
+    } else {
+        Err(format!(
+            "Denoising Strength must be between 0.10 and 1.00; received {strength}"
+        ))
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct EditSamplingOptions {
+    pub denoising_strength: f64,
+    /// Name already uploaded to ComfyUI.
+    pub init_image: Option<String>,
+    pub canvas_size: Option<(u32, u32)>,
+}
+
+pub struct GraphOptions<'a> {
+    pub prompt: &'a str,
+    pub refs: &'a [String],
+    pub width: u32,
+    pub height: u32,
+    pub steps: u32,
+    pub seed: u64,
+    pub edit_res: u32,
+    pub encoder: &'a str,
+    pub cfg_scale: f64,
+    pub negative: &'a str,
+    pub edit_sampling: Option<&'a EditSamplingOptions>,
+}
+
+/// Matches Qwen's reference encoder: scale to the requested pixel area, round
+/// each axis to the nearest 32 (Python ties-to-even), and keep at least 32px.
+pub fn edit_canvas_size(width: u32, height: u32, resolution: u32) -> (u32, u32) {
+    let round_axis = |v: f64| {
+        let units = v / 32.0;
+        let floor = units.floor();
+        let fraction = units - floor;
+        let rounded = if (fraction - 0.5).abs() < f64::EPSILON {
+            if (floor as u64) % 2 == 0 {
+                floor
+            } else {
+                floor + 1.0
+            }
+        } else {
+            units.round()
+        };
+        ((rounded as u32).max(1)) * 32
+    };
+    if width == 0 || height == 0 {
+        return (32, 32);
+    }
+    let scale = if resolution == 0 {
+        1.0
+    } else {
+        f64::from(resolution) / f64::from(width).mul_add(f64::from(height), 0.0).sqrt()
+    };
+    (
+        round_axis(f64::from(width) * scale),
+        round_axis(f64::from(height) * scale),
+    )
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -148,6 +224,35 @@ pub fn build_graph(
     cfg_scale: f64,
     negative: &str,
 ) -> Value {
+    build_graph_with_options(GraphOptions {
+        prompt,
+        refs,
+        width: w,
+        height: h,
+        steps,
+        seed,
+        edit_res,
+        encoder,
+        cfg_scale,
+        negative,
+        edit_sampling: None,
+    })
+}
+
+pub fn build_graph_with_options(options: GraphOptions<'_>) -> Value {
+    let GraphOptions {
+        prompt,
+        refs,
+        width: w,
+        height: h,
+        steps,
+        seed,
+        edit_res,
+        encoder,
+        cfg_scale,
+        negative,
+        edit_sampling: edit,
+    } = options;
     let mut g = json!({
         "unet": {"class_type": "UNETLoader", "inputs": {"unet_name": DIT.name, "weight_dtype": "default"}},
         "clip": {"class_type": "CLIPLoader", "inputs": {"clip_name": encoder, "type": "qwen_image", "device": "default"}},
@@ -171,9 +276,23 @@ pub fn build_graph(
         g["cache"] = json!({"class_type": "QwenImage21Cache", "inputs": {"model": ["unet", 0], "device": "auto", "dtype": "default"}});
         (json!(["cache", 0]), json!(["enc", 2]))
     };
+    let mut denoise = 1.0;
+    let mut latent = latent;
+    if !refs.is_empty() {
+        if let Some(edit) = edit.filter(|edit| edit.denoising_strength < 1.0) {
+            if let (Some(image), Some((width, height))) = (&edit.init_image, edit.canvas_size) {
+                g["init_load"] = json!({"class_type": "LoadImage", "inputs": {"image": image}});
+                g["init_scale"] = json!({"class_type": "ImageScale", "inputs": {
+                    "image": ["init_load", 0], "upscale_method": "lanczos", "width": width, "height": height, "crop": "disabled"}});
+                g["init_latent"] = json!({"class_type": "VAEEncode", "inputs": {"pixels": ["init_scale", 0], "vae": ["vae", 0]}});
+                latent = json!(["init_latent", 0]);
+                denoise = edit.denoising_strength;
+            }
+        }
+    }
     g["sampler"] = json!({"class_type": "KSampler", "inputs": {
         "model": model, "seed": seed, "steps": steps, "cfg": cfg_scale, "sampler_name": "euler", "scheduler": "simple",
-        "positive": ["enc", 0], "negative": ["enc", 1], "latent_image": latent, "denoise": 1.0}});
+        "positive": ["enc", 0], "negative": ["enc", 1], "latent_image": latent, "denoise": denoise}});
     g
 }
 
@@ -397,6 +516,7 @@ pub async fn run_with_control(
     options: GenerateOptions<'_>,
 ) -> Result<GenResult, RunError> {
     validate_cfg(req.cfg).map_err(RunError::Request)?;
+    validate_denoising_strength(req.denoising_strength).map_err(RunError::Request)?;
     let client = reqwest::Client::builder()
         .connect_timeout(Duration::from_secs(20))
         .timeout(Duration::from_secs(120))
@@ -533,6 +653,31 @@ async fn run_inner(req: GenRequest, context: &mut RunContext<'_>) -> Result<GenR
         refs.push(uploaded);
     }
 
+    let is_photo_edit = !refs_in.is_empty() && req.mode != "text" && req.mode != "surprise";
+    let mut edit_sampling = None;
+    if is_photo_edit && req.denoising_strength < 1.0 {
+        let init_path = req
+            .init_image_path
+            .as_deref()
+            .or_else(|| refs_in.first().map(|p| p.as_str()));
+        if let Some(path) = init_path {
+            let init_path = Path::new(path);
+            let dimensions = image::image_dimensions(init_path).map_err(|error| {
+                RunError::Request(format!("Cannot read init image dimensions: {error}"))
+            })?;
+            let canvas_size =
+                edit_canvas_size(dimensions.0, dimensions.1, preset(&req.preset).edit_res);
+            let init_name = control
+                .race(upload(cfg, client, init_path, &tag, refs_in.len() + 1))
+                .await?;
+            edit_sampling = Some(EditSamplingOptions {
+                denoising_strength: req.denoising_strength,
+                init_image: Some(init_name),
+                canvas_size: Some(canvas_size),
+            });
+        }
+    }
+
     let prompt = if req.transparent && refs.is_empty() {
         wrap_transparent(&req.prompt)
     } else {
@@ -542,18 +687,19 @@ async fn run_inner(req: GenRequest, context: &mut RunContext<'_>) -> Result<GenR
     let seed = req
         .seed
         .unwrap_or_else(|| rand::thread_rng().gen_range(0..(1u64 << 48)));
-    let graph = build_graph(
-        &prompt,
-        &refs,
-        w,
-        h,
-        p.steps,
+    let graph = build_graph_with_options(GraphOptions {
+        prompt: &prompt,
+        refs: &refs,
+        width: w,
+        height: h,
+        steps: p.steps,
         seed,
-        p.edit_res,
-        cfg.profile.encoder().name,
-        req.cfg,
-        &req.negative,
-    );
+        edit_res: p.edit_res,
+        encoder: cfg.profile.encoder().name,
+        cfg_scale: req.cfg,
+        negative: &req.negative,
+        edit_sampling: edit_sampling.as_ref(),
+    });
 
     // Open the WebSocket before queueing so the first events are not lost.
     let client_id = format!("qil-{tag}");
@@ -768,6 +914,9 @@ async fn run_inner(req: GenRequest, context: &mut RunContext<'_>) -> Result<GenR
             width,
             height,
             preset: &req.preset,
+            cfg: req.cfg,
+            negative: &req.negative,
+            denoising_strength: req.denoising_strength,
             extra: None,
         },
     )?;
@@ -840,6 +989,22 @@ async fn run_inner(req: GenRequest, context: &mut RunContext<'_>) -> Result<GenR
 mod tests {
     use super::*;
 
+    fn graph_for_edit(refs: &[String], edit_sampling: Option<&EditSamplingOptions>) -> Value {
+        build_graph_with_options(GraphOptions {
+            prompt: "x",
+            refs,
+            width: 768,
+            height: 1376,
+            steps: 30,
+            seed: 1,
+            edit_res: 1024,
+            encoder: "enc.safetensors",
+            cfg_scale: 1.0,
+            negative: "",
+            edit_sampling,
+        })
+    }
+
     #[test]
     fn cfg_and_negative_reach_the_graph() {
         let graph = build_graph(
@@ -887,6 +1052,106 @@ mod tests {
             r#"{"mode":"text","prompt":"x","preset":"standard","aspect":"1:1","cfg":"strong"}"#,
         );
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn denoising_validation_and_legacy_deserialization_default() {
+        for strength in [0.10, 0.75, 1.0] {
+            assert_eq!(validate_denoising_strength(strength), Ok(()));
+        }
+        for strength in [0.09, 1.01, 0.0, f64::NAN, f64::INFINITY] {
+            assert!(validate_denoising_strength(strength).is_err());
+        }
+        let request: GenRequest = serde_json::from_str(
+            r#"{"mode":"photos","prompt":"x","images":["source.png"],"preset":"standard","aspect":"1:1"}"#,
+        ).unwrap();
+        assert_eq!(request.denoising_strength, 1.0);
+    }
+
+    #[test]
+    fn edit_canvas_matches_qwen_resolution_scaling_and_python_ties() {
+        assert_eq!(edit_canvas_size(768, 1376, 0), (768, 1376));
+        assert_eq!(edit_canvas_size(768, 1376, 1024), (768, 1376));
+        assert_eq!(edit_canvas_size(16, 16, 0), (32, 32));
+        // Python round(48 / 32) uses ties-to-even and therefore rounds 1.5 up
+        // to the even integer 2 (64px), unlike Rust f64::round.
+        assert_eq!(edit_canvas_size(48, 48, 0), (64, 64));
+        assert_eq!(edit_canvas_size(80, 80, 0), (64, 64));
+        assert_eq!(edit_canvas_size(2000, 1000, 1024), (1440, 736));
+    }
+
+    #[test]
+    fn denoising_graph_uses_clean_init_latent_and_keeps_reference_conditioning() {
+        let refs = vec!["source.png".to_string(), "reference.png".to_string()];
+        let options = EditSamplingOptions {
+            denoising_strength: 0.5,
+            init_image: Some("source.png".into()),
+            canvas_size: Some((768, 1376)),
+        };
+        let graph = graph_for_edit(&refs, Some(&options));
+        assert_eq!(graph["sampler"]["inputs"]["denoise"], json!(0.5));
+        assert_eq!(
+            graph["sampler"]["inputs"]["latent_image"],
+            json!(["init_latent", 0])
+        );
+        assert_eq!(graph["init_scale"]["inputs"]["width"], json!(768));
+        assert_eq!(graph["init_scale"]["inputs"]["height"], json!(1376));
+        assert_eq!(
+            graph["init_scale"]["inputs"]["upscale_method"],
+            json!("lanczos")
+        );
+        assert_eq!(graph["init_scale"]["inputs"]["crop"], json!("disabled"));
+        assert_eq!(
+            graph["enc"]["inputs"]["images.image_1"],
+            json!(["load1", 0])
+        );
+        assert_eq!(
+            graph["enc"]["inputs"]["images.image_2"],
+            json!(["load2", 0])
+        );
+        assert_eq!(graph["init_load"]["inputs"]["image"], json!("source.png"));
+
+        let full_noise = graph_for_edit(
+            &refs,
+            Some(&EditSamplingOptions {
+                denoising_strength: 1.0,
+                init_image: None,
+                canvas_size: None,
+            }),
+        );
+        assert_eq!(full_noise["sampler"]["inputs"]["denoise"], json!(1.0));
+        assert!(!full_noise.as_object().unwrap().contains_key("init_load"));
+        assert_eq!(
+            full_noise["sampler"]["inputs"]["latent_image"],
+            json!(["enc", 2])
+        );
+    }
+
+    #[test]
+    fn text_generation_ignores_edit_denoising_options() {
+        let graph = build_graph_with_options(GraphOptions {
+            prompt: "x",
+            refs: &[],
+            width: 1024,
+            height: 1024,
+            steps: 20,
+            seed: 1,
+            edit_res: 1024,
+            encoder: "enc.safetensors",
+            cfg_scale: 1.0,
+            negative: "",
+            edit_sampling: Some(&EditSamplingOptions {
+                denoising_strength: 0.5,
+                init_image: Some("source.png".into()),
+                canvas_size: Some((1024, 1024)),
+            }),
+        });
+        assert!(!graph.as_object().unwrap().contains_key("init_load"));
+        assert_eq!(
+            graph["sampler"]["inputs"]["latent_image"],
+            json!(["latent", 0])
+        );
+        assert_eq!(graph["sampler"]["inputs"]["denoise"], json!(1.0));
     }
 
     #[test]

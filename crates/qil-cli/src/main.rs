@@ -111,6 +111,12 @@ struct GenOpts {
     aspect: String,
     #[arg(long)]
     seed: Option<u64>,
+    /// Classifier-free guidance: 1.0 = off, 2.5-4.0 follows the prompt more closely
+    #[arg(long, default_value_t = 1.0)]
+    cfg: f64,
+    /// Negative prompt (only matters when --cfg is above 1.0)
+    #[arg(long, default_value = "")]
+    negative: String,
     /// Output .png file or folder (default: configured output folder)
     #[arg(short, long)]
     out: Option<PathBuf>,
@@ -266,6 +272,8 @@ fn request(
         aspect: o.aspect.clone(),
         seed: o.seed,
         transparent,
+        cfg: o.cfg,
+        negative: o.negative.clone(),
     }
 }
 
@@ -648,6 +656,8 @@ async fn bench(
             aspect: t["ar"].as_str().unwrap_or("1:1").into(),
             seed: Some(seed),
             transparent: false, // suite prompts already carry the RGBA wording where needed
+            cfg: 1.0,
+            negative: String::new(),
         };
         let running = Arc::new(AtomicBool::new(true));
         let peak = Arc::new(AtomicU32::new(0));

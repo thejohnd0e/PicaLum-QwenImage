@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.20 — 2026-11-01
+
+- Add an optional prompt-adherence slider (CFG 1.0–5.0) and negative prompt; defaults retain the historic CFG 1.0 behavior.
+- Save generated images to Pictures/PicaLum QwenImage by default and migrate prior configurations that point directly at a drive root.
+
 ## 0.1.19 — 2026-10-12
 
 - Publish a Windows x64 installer, standalone desktop application and `qil` CLI for the current feature set, including mask-guided editing from 0.1.18.

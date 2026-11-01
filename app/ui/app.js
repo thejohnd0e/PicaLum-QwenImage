@@ -16,6 +16,8 @@
     mode: "text",
     preset: localGet("preset", "standard"),
     aspect: localGet("aspect", "1:1"),
+    cfg: Number(localGet("cfg", "1")),
+    negative: localGet("negative", ""),
     surpriseAspect: "random",
     refs: [],
     engine: "off",
@@ -256,6 +258,19 @@
   document.querySelectorAll("#presets [data-preset]").forEach((b) =>
     b.addEventListener("click", () => { state.preset = b.dataset.preset; localSet("preset", state.preset); renderPresets(); updateGenButton(); }));
 
+  $("cfg").value = String(Math.min(5, Math.max(1, state.cfg || 1)));
+  $("cfgVal").textContent = Number($("cfg").value).toFixed(1);
+  $("negative").value = state.negative;
+  $("cfg").addEventListener("input", () => {
+    state.cfg = Number($("cfg").value);
+    $("cfgVal").textContent = state.cfg.toFixed(1);
+    localSet("cfg", String(state.cfg));
+  });
+  $("negative").addEventListener("input", () => {
+    state.negative = $("negative").value;
+    localSet("negative", state.negative);
+  });
+
   // Format
   function renderAspects() {
     const a = state.mode === "surprise" ? state.surpriseAspect : state.aspect;
@@ -363,7 +378,7 @@
     $("clearHistoryBtn").disabled = state.busy || state.history.length === 0;
     $("settingsBtn").disabled = state.busy;
     const locked = state.busy || state.verification.state === "running";
-    document.querySelectorAll("[data-mode], #promptText, #promptPhotos, #theme, #transparent, #seedLock, #seed, #presets [data-preset], #aspects [data-ar]").forEach((el) => { el.disabled = locked; });
+    document.querySelectorAll("[data-mode], #promptText, #promptPhotos, #theme, #transparent, #seedLock, #seed, #cfg, #negative, #presets [data-preset], #aspects [data-ar]").forEach((el) => { el.disabled = locked; });
     document.querySelectorAll(".ref-add, .ref .rot, .ref .x").forEach((el) => { el.disabled = locked; });
     promptPresets.setDisabled(locked);
   }
@@ -429,6 +444,8 @@
       images: state.mode === "photos" ? state.refs.map((r) => r.path) : [],
       preset: state.preset,
       aspect: state.aspect,
+      cfg: Number($("cfg").value),
+      negative: $("negative").value.trim(),
       surpriseAspect: state.surpriseAspect,
       theme: $("theme").value || null,
       transparent: state.mode === "text" && $("transparent").checked,
@@ -464,6 +481,8 @@
         aspect,
         seed: QilBatch.requestSeed(plan),
         transparent: snapshot.transparent,
+        cfg: snapshot.cfg,
+        negative: snapshot.negative,
       };
     }
 

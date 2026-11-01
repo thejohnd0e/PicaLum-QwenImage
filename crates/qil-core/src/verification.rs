@@ -38,6 +38,8 @@ pub fn request() -> GenRequest {
         aspect: "1:1".into(),
         seed: Some(42),
         transparent: false,
+        cfg: 1.0,
+        negative: String::new(),
     }
 }
 

@@ -28,6 +28,16 @@ pub struct GenRequest {
     pub seed: Option<u64>,
     #[serde(default)]
     pub transparent: bool,
+    /// Classifier-free guidance. 1.0 turns it off, which is the historic behaviour.
+    #[serde(default = "default_cfg")]
+    pub cfg: f64,
+    /// Negative prompt; only has an effect when `cfg` is above 1.0.
+    #[serde(default)]
+    pub negative: String,
+}
+
+fn default_cfg() -> f64 {
+    1.0
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -126,13 +136,15 @@ pub fn build_graph(
     seed: u64,
     edit_res: u32,
     encoder: &str,
+    cfg_scale: f64,
+    negative: &str,
 ) -> Value {
     let mut g = json!({
         "unet": {"class_type": "UNETLoader", "inputs": {"unet_name": DIT.name, "weight_dtype": "default"}},
         "clip": {"class_type": "CLIPLoader", "inputs": {"clip_name": encoder, "type": "qwen_image", "device": "default"}},
         "vae": {"class_type": "VAELoader", "inputs": {"vae_name": VAE.name}},
         "enc": {"class_type": "TextEncodeQwenImage21", "inputs": {
-            "clip": ["clip", 0], "prompt": prompt, "negative_prompt": "", "resolution": edit_res}},
+            "clip": ["clip", 0], "prompt": prompt, "negative_prompt": negative, "resolution": edit_res}},
         "decode": {"class_type": "VAEDecode", "inputs": {"samples": ["sampler", 0], "vae": ["vae", 0]}},
         "save": {"class_type": "PreviewImage", "inputs": {"images": ["decode", 0]}},
     });
@@ -151,7 +163,7 @@ pub fn build_graph(
         (json!(["cache", 0]), json!(["enc", 2]))
     };
     g["sampler"] = json!({"class_type": "KSampler", "inputs": {
-        "model": model, "seed": seed, "steps": steps, "cfg": 1.0, "sampler_name": "euler", "scheduler": "simple",
+        "model": model, "seed": seed, "steps": steps, "cfg": cfg_scale, "sampler_name": "euler", "scheduler": "simple",
         "positive": ["enc", 0], "negative": ["enc", 1], "latent_image": latent, "denoise": 1.0}});
     g
 }
@@ -529,6 +541,8 @@ async fn run_inner(req: GenRequest, context: &mut RunContext<'_>) -> Result<GenR
         seed,
         p.edit_res,
         cfg.profile.encoder().name,
+        req.cfg,
+        &req.negative,
     );
 
     // Open the WebSocket before queueing so the first events are not lost.
@@ -817,6 +831,61 @@ mod tests {
     use super::*;
 
     #[test]
+    fn cfg_and_negative_reach_the_graph() {
+        let graph = build_graph(
+            "x",
+            &[],
+            1024,
+            1024,
+            20,
+            1,
+            1024,
+            "enc.safetensors",
+            3.0,
+            "blurry, low detail",
+        );
+        assert_eq!(graph["sampler"]["inputs"]["cfg"], json!(3.0));
+        assert_eq!(
+            graph["enc"]["inputs"]["negative_prompt"],
+            json!("blurry, low detail")
+        );
+    }
+
+    #[test]
+    fn default_cfg_is_one_and_negative_empty() {
+        let request: GenRequest = serde_json::from_str(
+            r#"{"mode":"text","prompt":"x","preset":"standard","aspect":"1:1"}"#,
+        )
+        .unwrap();
+        assert_eq!(request.cfg, 1.0);
+        assert_eq!(request.negative, "");
+    }
+
+    #[test]
+    fn negative_with_commas_and_newlines_survives() {
+        let request: GenRequest = serde_json::from_str(
+            r#"{"mode":"text","prompt":"x","preset":"standard","aspect":"1:1","negative":"blurry,\nlow detail, watermark"}"#,
+        )
+        .unwrap();
+        let graph = build_graph(
+            "x",
+            &[],
+            1024,
+            1024,
+            20,
+            1,
+            1024,
+            "enc.safetensors",
+            1.0,
+            &request.negative,
+        );
+        assert_eq!(
+            graph["enc"]["inputs"]["negative_prompt"],
+            json!("blurry,\nlow detail, watermark")
+        );
+    }
+
+    #[test]
     fn new_prompt_id_is_a_valid_uuid_v4() {
         let id = new_prompt_id();
         let parts: Vec<&str> = id.split('-').collect();
@@ -866,7 +935,7 @@ mod tests {
     #[test]
     fn edit_graph_wires_all_refs() {
         let refs: Vec<String> = (1..=3).map(|i| format!("r{i}.png")).collect();
-        let g = build_graph("x", &refs, 0, 0, 20, 1, 1024, "enc.safetensors");
+        let g = build_graph("x", &refs, 0, 0, 20, 1, 1024, "enc.safetensors", 1.0, "");
         assert_eq!(g["enc"]["inputs"]["images.image_3"], json!(["load3", 0]));
         assert_eq!(g["sampler"]["inputs"]["latent_image"], json!(["enc", 2]));
         assert_eq!(g["clip"]["inputs"]["clip_name"], json!("enc.safetensors"));
@@ -875,7 +944,18 @@ mod tests {
 
     #[test]
     fn graph_uses_temporary_preview_node() {
-        let graph = build_graph("x", &[], 1024, 1024, 20, 1, 1024, "enc.safetensors");
+        let graph = build_graph(
+            "x",
+            &[],
+            1024,
+            1024,
+            20,
+            1,
+            1024,
+            "enc.safetensors",
+            1.0,
+            "",
+        );
         assert_eq!(graph["save"]["class_type"], "PreviewImage");
         assert!(graph["save"]["inputs"].get("filename_prefix").is_none());
     }

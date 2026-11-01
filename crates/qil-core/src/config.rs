@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 pub const APP_ID: &str = "picalum-qwenimage";
-pub const CURRENT_CONFIG_VERSION: u32 = 1;
+pub const CURRENT_CONFIG_VERSION: u32 = 2;
 /// ComfyUI commit this release was tested against.
 pub const COMFY_COMMIT: &str = "3b4c0b0e457cf0a51cf3038e0a6750d8f96ce251";
 pub const UV_VERSION: &str = "0.12.18";
@@ -227,6 +227,28 @@ fn legacy_output_dir() -> PathBuf {
         .join("PicaLum QwenImage")
 }
 
+fn default_output_dir() -> PathBuf {
+    dirs::picture_dir()
+        .unwrap_or_else(|| dirs::home_dir().unwrap_or_default().join("Pictures"))
+        .join("PicaLum QwenImage")
+}
+
+fn is_drive_root(path: &Path) -> bool {
+    #[cfg(windows)]
+    {
+        use std::path::Component;
+        let mut components = path.components();
+        matches!(components.next(), Some(Component::Prefix(_)))
+            && matches!(components.next(), Some(Component::RootDir))
+            && components.next().is_none()
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = path;
+        false
+    }
+}
+
 pub fn config_path() -> PathBuf {
     dirs::config_dir()
         .unwrap_or_else(std::env::temp_dir)
@@ -249,7 +271,7 @@ impl Default for Config {
             profile: Profile::default(),
             gpu_selection: GpuSelection::default(),
             gpu_verification: None,
-            output_dir: runtime_dir.join("ComfyUI").join("output"),
+            output_dir: default_output_dir(),
             save_json: default_save_json(),
             config_version: CURRENT_CONFIG_VERSION,
             port: default_port(),
@@ -338,6 +360,9 @@ fn migrate_config(cfg: &mut Config, legacy_output: &Path) -> bool {
     if cfg.config_version == 0 {
         cfg.save_json = true;
     }
+    if cfg.config_version < 2 && is_drive_root(&cfg.output_dir) {
+        cfg.output_dir = default_output_dir();
+    }
     cfg.config_version = CURRENT_CONFIG_VERSION;
     true
 }
@@ -367,9 +392,25 @@ mod tests {
     #[test]
     fn defaults_use_comfy_output_and_enable_json() {
         let cfg = Config::default();
-        assert_eq!(cfg.output_dir, cfg.comfy_dir().join("output"));
+        assert!(cfg.output_dir.ends_with("PicaLum QwenImage"));
         assert!(cfg.save_json);
         assert_eq!(cfg.config_version, CURRENT_CONFIG_VERSION);
+    }
+
+    #[test]
+    fn drive_root_output_migrates_to_pictures_but_custom_folder_is_kept() {
+        let mut root = Config::default();
+        root.config_version = 1;
+        root.output_dir = PathBuf::from(r"F:\");
+        assert!(migrate_config(&mut root, &legacy_output_dir()));
+        assert!(root.output_dir.ends_with("PicaLum QwenImage"));
+        assert_ne!(root.output_dir, PathBuf::from(r"F:\"));
+
+        let mut custom = Config::default();
+        custom.config_version = 1;
+        custom.output_dir = PathBuf::from(r"F:\Pictures\MyShots");
+        assert!(migrate_config(&mut custom, &legacy_output_dir()));
+        assert_eq!(custom.output_dir, PathBuf::from(r"F:\Pictures\MyShots"));
     }
 
     #[test]

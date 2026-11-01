@@ -104,6 +104,8 @@ pub fn build_gen_request(req: &MaskedEditRequest, marked_path: &Path) -> GenRequ
         aspect: "1:1".into(), // ignored: the canvas comes from the first image
         seed: req.seed,
         transparent: false,
+        cfg: 1.0,
+        negative: String::new(),
     }
 }
 

@@ -78,6 +78,14 @@ test("an unlocked seed is sent as null and references default to none", async ()
   assert.deepEqual(sent.references, []);
 });
 
+test("area CFG override reaches the backend and result metadata instead of main-window CFG", async () => {
+  let sent;
+  const { flow } = setup({ invoke: async (_command, args) => { sent = args.args; return backendResult; } });
+  const result = await flow.run({ ...payload, cfg: 3.7 });
+  assert.equal(sent.cfg, 3.7);
+  assert.equal(result.item.meta.cfg, 3.7);
+});
+
 test("a successful run adds the final result to the history exactly once", async () => {
   const { flow, state, calls } = setup({ invoke: async () => backendResult });
 

@@ -8,11 +8,10 @@
   function create(deps) {
     const { invoke, state, translate: t, hooks } = deps;
 
-    async function run({ sourcePath, maskPngBase64, instruction, featherPx, featherMode = "inward", denoisingStrength = state.denoisingStrength, references = [] }) {
+    async function run({ sourcePath, maskPngBase64, instruction, featherPx, featherMode = "inward", cfg = deps.getCfg(), denoisingStrength = state.denoisingStrength, references = [] }) {
       if (state.busy) return { error: t("maskBusy") };
       const seed = deps.lockedSeed();
       const preset = state.preset;
-      const cfg = deps.getCfg();
       const strength = Number(denoisingStrength ?? 0.75);
       const runId = ++state.generationRun;
       state.stopRequested = false;

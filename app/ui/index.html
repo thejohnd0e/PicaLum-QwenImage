@@ -111,6 +111,8 @@
         <label class="mask-range"><span data-i18n="maskFeatherMode"></span> <select id="maskFeatherMode"><option value="inward" data-i18n="maskFeatherInward"></option><option value="bothSides" data-i18n="maskFeatherBothSides"></option></select></label>
         <label class="mask-range"><span data-i18n="denoisingStrength"></span> <input type="range" id="maskDenoisingStrength" min="0.10" max="1.00" step="0.01" value="0.75"></label>
         <input class="denoising-number" id="maskDenoisingStrengthNumber" type="number" min="0.10" max="1.00" step="0.01" value="0.75" data-i18n-aria="denoisingStrength">
+        <label class="mask-range"><span data-i18n="cfgScale"></span> <input type="range" id="maskCfg" min="1.0" max="5.0" step="0.1" value="1.0"></label>
+        <input class="denoising-number" id="maskCfgNumber" type="number" min="1.0" max="5.0" step="0.1" value="1.0" required data-i18n-aria="cfgScale">
         <span class="mask-toolbar-gap"></span>
         <button type="button" class="btn btn-sm" id="maskUndoBtn" data-i18n="maskUndo"></button>
         <button type="button" class="btn btn-sm" id="maskRedoBtn" data-i18n="maskRedo"></button>

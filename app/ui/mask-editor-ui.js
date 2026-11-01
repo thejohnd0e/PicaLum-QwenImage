@@ -348,7 +348,7 @@
       $("maskSizeValue").textContent = `${model.brushSize} px`;
       $("maskFeatherNumber").value = $("maskFeather").value;
       $("maskGaussianWarning").hidden = featherMode !== "bothSides";
-      for (const id of ["maskBrush", "maskEraser", "maskUndoBtn", "maskRedoBtn", "maskClearBtn", "maskFitBtn", "maskSize", "maskFeather", "maskFeatherNumber", "maskFeatherMode", "maskDenoisingStrength", "maskDenoisingStrengthNumber", "maskInstruction", "maskRef"]) {
+      for (const id of ["maskBrush", "maskEraser", "maskUndoBtn", "maskRedoBtn", "maskClearBtn", "maskFitBtn", "maskSize", "maskFeather", "maskFeatherNumber", "maskFeatherMode", "maskDenoisingStrength", "maskDenoisingStrengthNumber", "maskCfg", "maskCfgNumber", "maskInstruction", "maskRef"]) {
         $(id).disabled = locked;
       }
       $("maskGenerate").disabled = locked;
@@ -443,6 +443,10 @@
       const denoisingStrength = Number(deps.getDenoisingStrength?.() ?? 0.75);
       $("maskDenoisingStrength").value = denoisingStrength.toFixed(2);
       $("maskDenoisingStrengthNumber").value = denoisingStrength.toFixed(2);
+      const cfg = Number(deps.getCfg?.() ?? 1.0);
+      $("maskCfg").value = cfg.toFixed(1);
+      $("maskCfgNumber").value = cfg.toFixed(1);
+      $("maskCfgNumber").setCustomValidity("");
       autoText = "";
       $("maskRef").value = "";
       renderReferences();
@@ -525,6 +529,10 @@
         $("maskDenoisingStrengthNumber").reportValidity();
         return;
       }
+      if (!$("maskCfgNumber").checkValidity()) {
+        $("maskCfgNumber").reportValidity();
+        return;
+      }
       const blocked = deps.canRun();
       if (blocked) {
         showError(blocked);
@@ -552,6 +560,7 @@
               featherPx: Number($("maskFeather").value),
               featherMode,
           denoisingStrength: Number($("maskDenoisingStrength").value),
+          cfg: Number($("maskCfgNumber").value),
           references: $("maskRef").value ? [$("maskRef").value] : [],
         });
       } catch (error) {
@@ -628,6 +637,20 @@
       $("maskBrush").addEventListener("click", () => { model.setTool("brush"); renderControls(); requestDraw(); });
       $("maskEraser").addEventListener("click", () => { model.setTool("eraser"); renderControls(); requestDraw(); });
       $("maskSize").addEventListener("input", (e) => setBrush(Number(e.target.value)));
+      $("maskCfg").addEventListener("input", () => {
+        $("maskCfgNumber").setCustomValidity("");
+        $("maskCfgNumber").value = Number($("maskCfg").value).toFixed(1);
+      });
+      $("maskCfgNumber").addEventListener("input", () => {
+        const field = $("maskCfgNumber");
+        field.setCustomValidity("");
+        const value = Number(field.value);
+        if (field.value === "" || !Number.isFinite(value) || value < 1 || value > 5 || !field.checkValidity()) {
+          field.setCustomValidity(t("cfgInvalid"));
+          return;
+        }
+        $("maskCfg").value = value.toFixed(1);
+      });
       $("maskFeather").addEventListener("input", () => {
         $("maskFeatherNumber").value = $("maskFeather").value;
         renderControls();

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.24 — 2026-11-02
+
+- Add CFG Scale slider and numeric input alongside denoising in the area editor (1.0–5.0, step 0.1). Initialize from the main window and use the dialog value for area generation and metadata without changing the main-window setting.
+
 ## 0.1.23 — 2026-11-02
 
 - Fix area editor opening: remove a stale reference to the deleted feather-value label that threw before photo loading began. Add dialog lifecycle tests using IDs from the shipped HTML.

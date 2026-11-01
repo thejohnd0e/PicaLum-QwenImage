@@ -324,6 +324,8 @@ struct MaskedEditArgs {
     preset: String,
     seed: Option<u64>,
     feather_px: u32,
+    #[serde(default)]
+    feather_mode: qil_core::masked_edit::MaskFeatherMode,
     #[serde(default = "default_mask_cfg")]
     cfg: f64,
     #[serde(default = "default_mask_denoising_strength")]
@@ -385,6 +387,7 @@ async fn generate_masked_edit(
         preset: args.preset,
         seed: args.seed,
         feather_px: args.feather_px,
+        feather_mode: args.feather_mode,
         cfg: args.cfg,
         denoising_strength: args.denoising_strength,
         references: args.references.into_iter().map(PathBuf::from).collect(),

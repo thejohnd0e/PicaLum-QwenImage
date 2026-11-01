@@ -21,7 +21,9 @@ use crate::generate::{
     preset, remove_temp_file, run_error_text, run_with_control, should_save_json,
     unique_output_path, GenRequest, GenResult, GenerateOptions,
 };
-use crate::masked_edit::{composite, validate_mask, MaskedEditError, MaskedEditOptions};
+use crate::masked_edit::{
+    composite, validate_mask, MaskFeatherMode, MaskedEditError, MaskedEditOptions,
+};
 use crate::png_metadata::{embed_generation_metadata, GenerationMetadata};
 use crate::run_control::RunError;
 
@@ -44,6 +46,7 @@ pub struct MaskedEditRequest {
     pub preset: String,
     pub seed: Option<u64>,
     pub feather_px: u32,
+    pub feather_mode: MaskFeatherMode,
     pub cfg: f64,
     pub denoising_strength: f64,
     /// Optional reference photos for the content to place in the area; they are
@@ -245,6 +248,7 @@ pub fn finish(
     mask: &GrayImage,
     raw: &image::DynamicImage,
     feather_px: u32,
+    feather_mode: MaskFeatherMode,
 ) -> Result<RgbaImage, MaskedEditError> {
     let generated = if raw.dimensions() == source.dimensions() {
         raw.to_rgba8()
@@ -256,7 +260,15 @@ pub fn finish(
             FilterType::Lanczos3,
         )
     };
-    composite(source, &generated, mask, &MaskedEditOptions { feather_px })
+    composite(
+        source,
+        &generated,
+        mask,
+        &MaskedEditOptions {
+            feather_px,
+            feather_mode,
+        },
+    )
 }
 
 fn encode_png(img: &RgbaImage) -> Result<Vec<u8>, String> {
@@ -366,10 +378,11 @@ async fn run_in_temp(
     let raw_bytes = tokio::fs::read(&raw.path)
         .await
         .map_err(|e| RunError::Request(format!("Cannot read the engine result: {e}")))?;
-    let (feather, src, msk) = (req.feather_px, source, mask);
+    let (feather, feather_mode, src, msk) = (req.feather_px, req.feather_mode, source, mask);
     let final_png = tokio::task::spawn_blocking(move || -> Result<(Vec<u8>, u32, u32), String> {
         let raw_img = image::load_from_memory(&raw_bytes).map_err(|e| e.to_string())?;
-        let done = finish(&src, &msk, &raw_img, feather).map_err(|e| e.to_string())?;
+        let done =
+            finish(&src, &msk, &raw_img, feather, feather_mode).map_err(|e| e.to_string())?;
         Ok((encode_png(&done)?, done.width(), done.height()))
     })
     .await
@@ -379,8 +392,9 @@ async fn run_in_temp(
     let p = preset(&req.preset);
     let instruction = req.instruction.trim().to_string();
     let extra = format!(
-        "Mode: {MODE}\nGuidance: {STRATEGY_ID}\nFeather: {}px\nReferences: {}",
+        "Mode: {MODE}\nGuidance: {STRATEGY_ID}\nFeather: {}px ({:?})\nReferences: {}",
         req.feather_px,
+        req.feather_mode,
         req.references.len()
     );
     let png = embed_generation_metadata(
@@ -511,6 +525,7 @@ mod tests {
             preset: "draft".into(),
             seed: Some(1),
             feather_px: 4,
+            feather_mode: MaskFeatherMode::Inward,
             cfg: 1.0,
             denoising_strength: 0.75,
             references: vec![],
@@ -652,7 +667,7 @@ mod tests {
             80,
             Rgba([250, 10, 10, 255]),
         ));
-        let out = finish(&src, &mask, &raw, 3).unwrap();
+        let out = finish(&src, &mask, &raw, 3, MaskFeatherMode::Inward).unwrap();
         assert_eq!(out.dimensions(), (150, 100));
         for (x, y, p) in out.enumerate_pixels() {
             if mask.get_pixel(x, y)[0] == 0 {

@@ -11,12 +11,23 @@ use std::fmt;
 use image::{GrayImage, Rgba, RgbaImage};
 
 /// Largest accepted feather radius, in source pixels.
-pub const MAX_FEATHER_PX: u32 = 256;
+pub const MAX_FEATHER_PX: u32 = 64;
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum MaskFeatherMode {
+    #[default]
+    Inward,
+    BothSides,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MaskedEditOptions {
     /// Feather radius in source-image pixels; 0 means a hard mask.
     pub feather_px: u32,
+    #[serde(default)]
+    pub feather_mode: MaskFeatherMode,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -85,7 +96,7 @@ pub fn validate_mask(source: &RgbaImage, mask: &GrayImage) -> Result<(), MaskedE
 /// Feathering is inward-only: the weight ramps up with the distance from the
 /// nearest zero-mask pixel, so zero-mask pixels never change and the editable
 /// region never grows. The image border is not treated as an edge.
-fn blend_weights(mask: &GrayImage, feather_px: u32) -> Vec<f32> {
+fn inward_weights(mask: &GrayImage, feather_px: u32) -> Vec<f32> {
     let (w, h) = mask.dimensions();
     let (w, h) = (w as usize, h as usize);
     let raw = mask.as_raw();
@@ -153,6 +164,80 @@ fn blend_weights(mask: &GrayImage, feather_px: u32) -> Vec<f32> {
         .collect()
 }
 
+/// Produces the exact 8-bit mask used by compositing and preview. BothSides
+/// applies a separable normalized Gaussian (sigma = radius, 3-sigma support)
+/// with edge replication; Inward keeps every raw zero at zero.
+pub fn effective_mask(
+    mask: &GrayImage,
+    options: &MaskedEditOptions,
+) -> Result<GrayImage, MaskedEditError> {
+    let radius = options.feather_px;
+    if radius > MAX_FEATHER_PX {
+        return Err(MaskedEditError::InvalidFeather(radius));
+    }
+    if radius == 0 {
+        return Ok(mask.clone());
+    }
+    let weights = match options.feather_mode {
+        MaskFeatherMode::Inward => inward_weights(mask, radius),
+        MaskFeatherMode::BothSides => gaussian_weights(mask, radius),
+    };
+    let (width, height) = mask.dimensions();
+    let pixels = weights
+        .into_iter()
+        .map(|w| (w * 255.0).round().clamp(0.0, 255.0) as u8)
+        .collect();
+    GrayImage::from_raw(width, height, pixels)
+        .ok_or_else(|| MaskedEditError::Image("invalid effective mask buffer".into()))
+}
+
+fn gaussian_weights(mask: &GrayImage, radius: u32) -> Vec<f32> {
+    let (width, height) = mask.dimensions();
+    let (width, height) = (width as usize, height as usize);
+    let sigma = radius as f32;
+    let support = (3.0 * sigma).ceil() as isize;
+    let kernel: Vec<f32> = (-support..=support)
+        .map(|offset| (-(offset * offset) as f32 / (2.0 * sigma * sigma)).exp())
+        .collect();
+    let normalization: f32 = kernel.iter().sum();
+    let kernel: Vec<f32> = kernel
+        .into_iter()
+        .map(|weight| weight / normalization)
+        .collect();
+    let input: Vec<f32> = mask
+        .as_raw()
+        .iter()
+        .map(|&value| value as f32 / 255.0)
+        .collect();
+    let mut horizontal = vec![0.0; input.len()];
+    for y in 0..height {
+        for x in 0..width {
+            let mut value = 0.0;
+            for (index, weight) in kernel.iter().enumerate() {
+                let offset = index as isize - support;
+                let sample_x =
+                    (x as isize + offset).clamp(0, width.saturating_sub(1) as isize) as usize;
+                value += input[y * width + sample_x] * weight;
+            }
+            horizontal[y * width + x] = value;
+        }
+    }
+    let mut output = vec![0.0; input.len()];
+    for y in 0..height {
+        for x in 0..width {
+            let mut value = 0.0;
+            for (index, weight) in kernel.iter().enumerate() {
+                let offset = index as isize - support;
+                let sample_y =
+                    (y as isize + offset).clamp(0, height.saturating_sub(1) as isize) as usize;
+                value += horizontal[sample_y * width + x] * weight;
+            }
+            output[y * width + x] = value;
+        }
+    }
+    output
+}
+
 fn blend(src: &Rgba<u8>, gen: &Rgba<u8>, t: f32) -> Rgba<u8> {
     if t <= 0.0 {
         return *src;
@@ -196,7 +281,12 @@ pub fn composite(
             actual: generated.dimensions(),
         });
     }
-    let weights = blend_weights(mask, options.feather_px);
+    let effective = effective_mask(mask, options)?;
+    let weights: Vec<f32> = effective
+        .as_raw()
+        .iter()
+        .map(|&value| value as f32 / 255.0)
+        .collect();
     let (w, h) = source.dimensions();
     let mut out = RgbaImage::new(w, h);
     for (i, (o, (s, g))) in out
@@ -222,7 +312,55 @@ mod tests {
     }
 
     fn hard() -> MaskedEditOptions {
-        MaskedEditOptions { feather_px: 0 }
+        MaskedEditOptions {
+            feather_px: 0,
+            feather_mode: MaskFeatherMode::Inward,
+        }
+    }
+
+    #[test]
+    fn feather_mode_defaults_to_inward_and_serializes_in_camel_case() {
+        assert_eq!(MaskFeatherMode::default(), MaskFeatherMode::Inward);
+        assert_eq!(
+            serde_json::to_string(&MaskFeatherMode::BothSides).unwrap(),
+            "\"bothSides\""
+        );
+    }
+
+    #[test]
+    fn effective_mask_preserves_gray_at_zero_radius_and_source_mask() {
+        let mask = GrayImage::from_raw(3, 1, vec![0, 127, 255]).unwrap();
+        let before = mask.clone();
+        let effective = effective_mask(
+            &mask,
+            &MaskedEditOptions {
+                feather_px: 0,
+                feather_mode: MaskFeatherMode::BothSides,
+            },
+        )
+        .unwrap();
+        assert_eq!(effective, mask);
+        assert_eq!(mask, before);
+    }
+
+    #[test]
+    fn both_sides_gaussian_bleeds_outside_mask_and_respects_canvas_edge() {
+        let mask = GrayImage::from_raw(7, 1, vec![0, 0, 0, 255, 0, 0, 0]).unwrap();
+        let effective = effective_mask(
+            &mask,
+            &MaskedEditOptions {
+                feather_px: 1,
+                feather_mode: MaskFeatherMode::BothSides,
+            },
+        )
+        .unwrap();
+        assert!(effective.get_pixel(2, 0)[0] > 0);
+        assert!(effective.get_pixel(4, 0)[0] > 0);
+        assert!(
+            effective.get_pixel(0, 0)[0] > 0,
+            "Gaussian support reaches image edge"
+        );
+        assert_eq!(mask.get_pixel(2, 0)[0], 0);
     }
 
     #[test]
@@ -245,7 +383,10 @@ mod tests {
             &solid(4, 4, SRC),
             &solid(4, 4, GEN),
             &m,
-            &MaskedEditOptions { feather_px: 8 },
+            &MaskedEditOptions {
+                feather_px: 8,
+                feather_mode: MaskFeatherMode::Inward,
+            },
         )
         .unwrap();
         assert!(
@@ -264,13 +405,14 @@ mod tests {
                 m.put_pixel(x, y, Luma([255]));
             }
         }
-        for feather in [0, 1, 3, 100] {
+        for feather in [0, 1, 3, 64] {
             let out = composite(
                 &src,
                 &solid(8, 8, GEN),
                 &m,
                 &MaskedEditOptions {
                     feather_px: feather,
+                    feather_mode: MaskFeatherMode::Inward,
                 },
             )
             .unwrap();
@@ -292,7 +434,10 @@ mod tests {
             &solid(16, 1, Rgba([0, 0, 0, 255])),
             &solid(16, 1, Rgba([200, 200, 200, 255])),
             &m,
-            &MaskedEditOptions { feather_px: 4 },
+            &MaskedEditOptions {
+                feather_px: 4,
+                feather_mode: MaskFeatherMode::Inward,
+            },
         )
         .unwrap();
         assert_eq!(out.get_pixel(3, 0)[0], 0);
@@ -366,6 +511,7 @@ mod tests {
             &m,
             &MaskedEditOptions {
                 feather_px: MAX_FEATHER_PX + 1,
+                feather_mode: MaskFeatherMode::Inward,
             },
         )
         .unwrap_err();

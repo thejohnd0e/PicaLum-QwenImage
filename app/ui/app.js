@@ -18,7 +18,6 @@
     aspect: localGet("aspect", "1:1"),
     cfg: Number(localGet("cfg", "1")),
     denoisingStrength: Number(localGet("denoisingStrength", "0.75")),
-    negative: localGet("negative", ""),
     surpriseAspect: "random",
     refs: [],
     engine: "off",
@@ -265,7 +264,6 @@
   const initialCfg = Number.isFinite(state.cfg) ? Math.min(5, Math.max(1, state.cfg)) : 1;
   $("cfg").value = String(initialCfg);
   $("cfgNumber").value = initialCfg.toFixed(1);
-  $("negative").value = state.negative;
   function updateCfg(value, source) {
     const number = Number(value);
     if (value === "" || !Number.isFinite(number) || number < 1 || number > 5) {
@@ -309,10 +307,6 @@
   $("denoisingStrengthNumber").addEventListener("input", () => updateDenoisingStrength($("denoisingStrengthNumber").value, "number"));
   $("maskDenoisingStrength").addEventListener("input", () => updateDenoisingStrength($("maskDenoisingStrength").value, "range", "mask"));
   $("maskDenoisingStrengthNumber").addEventListener("input", () => updateDenoisingStrength($("maskDenoisingStrengthNumber").value, "number", "mask"));
-  $("negative").addEventListener("input", () => {
-    state.negative = $("negative").value;
-    localSet("negative", state.negative);
-  });
 
   // Format
   function renderAspects() {
@@ -423,7 +417,7 @@
     $("clearHistoryBtn").disabled = state.busy || state.history.length === 0;
     $("settingsBtn").disabled = state.busy;
     const locked = state.busy || state.verification.state === "running";
-    document.querySelectorAll("[data-mode], #promptText, #promptPhotos, #theme, #transparent, #seedLock, #seed, #cfg, #negative, #presets [data-preset], #aspects [data-ar]").forEach((el) => { el.disabled = locked; });
+    document.querySelectorAll("[data-mode], #promptText, #promptPhotos, #theme, #transparent, #seedLock, #seed, #cfg, #presets [data-preset], #aspects [data-ar]").forEach((el) => { el.disabled = locked; });
     document.querySelectorAll(".ref-add, .ref .rot, .ref .x").forEach((el) => { el.disabled = locked; });
     promptPresets.setDisabled(locked);
   }
@@ -500,7 +494,6 @@
       aspect: state.aspect,
       cfg: state.cfg,
       denoisingStrength: Number($("denoisingStrength").value),
-      negative: $("negative").value.trim(),
       surpriseAspect: state.surpriseAspect,
       theme: $("theme").value || null,
       transparent: state.mode === "text" && $("transparent").checked,
@@ -537,7 +530,6 @@
         seed: QilBatch.requestSeed(plan),
         transparent: snapshot.transparent,
         cfg: snapshot.cfg,
-        negative: snapshot.negative,
         denoisingStrength: snapshot.mode === "photos" ? snapshot.denoisingStrength : 1.0,
       };
     }

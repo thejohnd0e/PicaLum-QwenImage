@@ -2,18 +2,21 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-test("generation request carries cfg and negative", () => {
+test("desktop generation retains CFG but omits negative-prompt state and payload", () => {
   const src = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
   assert.match(src, /cfg:\s*snapshot\.cfg/);
-  assert.match(src, /negative:\s*snapshot\.negative/);
   assert.match(src, /cfg:\s*state\.cfg/);
-  assert.match(src, /negative:\s*\$\("negative"\)\.value\.trim\(\)/);
+  assert.doesNotMatch(src, /localGet\("negative"/);
+  assert.doesNotMatch(src, /\$\("negative"\)/);
+  assert.doesNotMatch(src, /negative:\s*snapshot\.negative/);
+  assert.doesNotMatch(html, /id="negative"/);
 });
 
-test("defaults preserve historic prompt-adherence settings", () => {
+test("legacy saved negative text is not loaded into desktop state", () => {
   const src = readFileSync(new URL("../app.js", import.meta.url), "utf8");
-  assert.match(src, /cfg:\s*Number\(localGet\("cfg",\s*"1"\)\)/);
-  assert.match(src, /negative:\s*localGet\("negative",\s*""\)/);
+  assert.doesNotMatch(src, /negative:\s*localGet\("negative"/);
+  assert.doesNotMatch(src, /localSet\("negative"/);
 });
 
 test("CFG controls use the agreed range, precision, and a matching numeric input", () => {

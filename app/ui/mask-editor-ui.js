@@ -346,7 +346,6 @@
       $("maskBrush").setAttribute("aria-pressed", String(model.tool === "brush"));
       $("maskEraser").setAttribute("aria-pressed", String(model.tool === "eraser"));
       $("maskSizeValue").textContent = `${model.brushSize} px`;
-      $("maskFeatherValue").textContent = `${$("maskFeather").value} px`;
       $("maskFeatherNumber").value = $("maskFeather").value;
       $("maskGaussianWarning").hidden = featherMode !== "bothSides";
       for (const id of ["maskBrush", "maskEraser", "maskUndoBtn", "maskRedoBtn", "maskClearBtn", "maskFitBtn", "maskSize", "maskFeather", "maskFeatherNumber", "maskFeatherMode", "maskDenoisingStrength", "maskDenoisingStrengthNumber", "maskInstruction", "maskRef"]) {

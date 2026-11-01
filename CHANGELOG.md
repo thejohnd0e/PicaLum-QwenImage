@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.23 — 2026-11-02
+
+- Fix area editor opening: remove a stale reference to the deleted feather-value label that threw before photo loading began. Add dialog lifecycle tests using IDs from the shipped HTML.
+
 ## 0.1.22 — 2026-11-02
 
 - Prevent the mask editor from allocating and processing full-resolution overlay layers before the user paints; keep initial photo loading and the window responsive.

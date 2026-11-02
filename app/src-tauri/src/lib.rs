@@ -7,8 +7,8 @@ use base64::Engine as _;
 use qil_core::masked_edit::{effective_mask, MaskFeatherMode, MaskedEditOptions};
 use qil_core::prompt_presets::PromptPresetFile;
 use qil_core::{
-    engine, generate, gpu, lama, prompt_presets, setup, surprise, verification, Config, Engine,
-    EngineState, GenRequest, GenResult, Profile,
+    engine, generate, gpu, lama, prompt_presets, setup, verification, Config, Engine, EngineState,
+    GenRequest, GenResult, Profile,
 };
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, RunEvent, State};
@@ -555,11 +555,6 @@ async fn cancel(settings: State<'_, Settings>) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn surprise_idea(theme: Option<String>) -> surprise::Idea {
-    surprise::idea(theme.as_deref())
-}
-
-#[tauri::command]
 async fn gpu_stats(settings: State<'_, Settings>) -> Result<Option<gpu::Gpu>, String> {
     let uuid = cfg(&settings).gpu_selection.uuid;
     Ok(
@@ -758,7 +753,6 @@ pub fn run() {
             gpu_verification_start,
             gpu_verification_cancel,
             gpu_verification_status,
-            surprise_idea,
             gpu_stats,
             app_version,
             thumbnail,

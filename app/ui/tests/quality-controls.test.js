@@ -27,7 +27,7 @@ function setup({ saved = {}, invoke, onChange = () => {} } = {}) {
     qualitySteps: element({ value: "30", min: "1", max: "100", step: "1" }),
     qualityWidth: element({ value: "1280", min: "256", max: "4096", step: "32" }),
     qualityHeight: element({ value: "1280", min: "256", max: "4096", step: "32" }),
-    qualitySizePair: element(), qualitySizeAuto: element({ hidden: true }),
+    qualitySizePair: element(),
     qualityStatus: element(), qualityError: element(), qualityWarning: element(),
     qualityPresetDraft: element({ dataset: { t: "1024² · 20 · ~35 s", e: "1024 px · 20 · ~50 s" } }),
     qualityPresetStandard: element({ dataset: { t: "1.6 MP · 30 · ~1.5 min", e: "1280 px · 30 · ~2.5 min" } }),
@@ -57,6 +57,17 @@ function setup({ saved = {}, invoke, onChange = () => {} } = {}) {
   });
   return { api, nodes, values, calls };
 }
+
+test("desktop no longer ships a Surprise mode", () => {
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const app = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+  assert.match(html, /data-mode="text"/);
+  assert.match(html, /data-mode="photos"/);
+  assert.doesNotMatch(html, /data-mode="surprise"/);
+  assert.doesNotMatch(html, /id="theme"/);
+  assert.doesNotMatch(html, /id="idea"/);
+  assert.doesNotMatch(app, /surprise_idea/);
+});
 
 test("quality UI is one collapsed card with segmented presets and bounded manual controls", () => {
   const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
@@ -176,11 +187,6 @@ test("switching modes preserves the custom canvas instead of resetting to preset
   await api.setContext({ mode: "text", aspect: "1:1", sourcePath: null });
   assert.deepEqual([api.snapshot().width, api.snapshot().height], [1024, 1024]);
 
-  await api.setContext({ mode: "surprise", aspect: "random", sourcePath: null });
-  assert.equal(api.snapshot().width, undefined);
-  await api.setContext({ mode: "surprise", aspect: "1:1", sourcePath: null });
-  assert.deepEqual([api.snapshot().width, api.snapshot().height], [1024, 1024]);
-
   await api.setContext({ mode: "photos", aspect: "1:1", sourcePath: "source.jpg" });
   assert.deepEqual([api.snapshot().width, api.snapshot().height], [1472, 1120]);
   await api.setContext({ mode: "text", aspect: "1:1", sourcePath: null });
@@ -201,18 +207,6 @@ test("photo dimensions are source-derived and read-only while steps stay editabl
   assert.match(nodes.qualityStatus.textContent, /qualitySourceShort/);
   assert.match(nodes.qualityPresetMeta.textContent, /1280 px · 30/);
   assert.deepEqual(calls[0].args.request.images, ["source.jpg"]);
-});
-
-test("random Surprise keeps a pixel budget but leaves dimensions unresolved", async () => {
-  const { api, nodes } = setup();
-  await api.init({ mode: "surprise", aspect: "random" });
-  assert.equal(nodes.qualityWidth.disabled, true);
-  assert.equal(nodes.qualityHeight.disabled, true);
-  assert.equal(nodes.qualitySizePair.hidden, true);
-  assert.equal(nodes.qualitySizeAuto.hidden, false);
-  assert.equal(nodes.qualityStatus.hidden, true);
-  assert.equal(api.snapshot().width, undefined);
-  assert.ok(api.snapshot().pixelBudget > 0);
 });
 
 test("storage migrations, corrupt values, and stale resolutions are safe", async () => {

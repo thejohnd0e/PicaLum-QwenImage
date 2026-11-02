@@ -20,7 +20,6 @@
     <nav class="mode-nav" id="modeNav" role="tablist" aria-label="Workspace mode" data-i18n-aria="modeNavigation" hidden>
       <button type="button" role="tab" data-mode="text" aria-selected="true" data-i18n="modeText"></button>
       <button type="button" role="tab" data-mode="photos" aria-selected="false" data-i18n="modePhotos"></button>
-      <button type="button" role="tab" data-mode="surprise" aria-selected="false" data-i18n="modeSurprise"></button>
     </nav>
     <div class="status">
       <div class="stat" id="engineStat" hidden>
@@ -246,16 +245,6 @@
           </div>
         </section>
 
-        <section class="group" data-show="surprise" hidden>
-          <label class="label" for="theme"><span data-i18n="theme"></span> <span class="muted" data-i18n="optional"></span></label>
-          <input id="theme" type="text" spellcheck="false" data-i18n-ph="themePh">
-          <p class="hint" data-i18n="surpriseHint"></p>
-          <div class="idea" id="idea" hidden>
-            <div class="label-row"><span class="label" data-i18n="lastIdea"></span><button type="button" class="btn btn-xs" id="ideaToText" data-i18n="editAsText"></button></div>
-            <p id="ideaTxt"></p>
-          </div>
-        </section>
-
         <section class="group quality-group">
           <details id="qualityPresets">
             <summary>
@@ -283,7 +272,6 @@
                   <span class="x" aria-hidden="true">×</span>
                   <input id="qualityHeight" class="num dim" type="number" min="256" max="4096" step="32" value="1280" data-i18n-aria="qualityHeight">
                 </div>
-                <span class="pair-auto" id="qualitySizeAuto" data-i18n="qualityRandomShort" hidden></span>
                 <span class="aside mono" id="qualityStatus" aria-live="polite"></span>
               </div>
             </div>
@@ -319,10 +307,9 @@
           </div>
         </section>
 
-        <section class="group" data-show="text surprise">
+        <section class="group" data-show="text">
           <span class="label" data-i18n="format"></span>
           <div class="aspects" id="aspects">
-            <button type="button" data-ar="random" class="ar-random" data-only="surprise" data-i18n="random"></button>
             <button type="button" data-ar="1:1"><i style="--w:14px;--h:14px"></i>1:1</button>
             <button type="button" data-ar="4:3"><i style="--w:16px;--h:12px"></i>4:3</button>
             <button type="button" data-ar="3:4"><i style="--w:12px;--h:16px"></i>3:4</button>

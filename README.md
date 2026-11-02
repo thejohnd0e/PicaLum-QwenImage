@@ -28,7 +28,6 @@ Your photos and prompts stay on your computer. No cloud image service or subscri
 | **Combine photos** | Use up to **10 photos** together — for example, put a subject from one photo into the scene of another |
 | **Change just one area** | Paint the area to edit and describe the change. Everything outside it stays unchanged. You can also choose another photo as the content for that area. This feature is beta |
 | **Create with a transparent background** | Make a new image with no background, useful for stickers and cutouts |
-| **Let the app invent an idea** | Use **Surprise**, with an optional theme, then keep or edit the proposed description |
 | **Choose quality and shape** | Three quality levels: Draft, Standard and Max. Choose square, portrait or landscape shapes from seven proportions |
 | **Make several versions** | Generate one image, a series of **4 or 8**, or keep generating until you stop |
 | **Control when to stop** | Cancel the current generation, or let a finite series finish its current image before stopping |
@@ -132,17 +131,11 @@ Open **Manage presets** to:
 
 Saved prompts remain available after you restart the app. They store the instruction, not image settings.
 
-### Surprise: let the app invent an idea
-
-Choose **Surprise**, optionally enter a **Theme**, select quality and press **Surprise me**. The app invents an English description locally. Choose **Random** format to let it choose the image's shape, or pick one of the seven fixed proportions.
-
-The description appears under **Last idea**. **Edit as text** copies it into Create so you can refine it. A Surprise series invents a fresh idea for each image, even with a locked seed.
-
 ### Make a series and stop generation
 
-The main button makes one image. Its arrow opens **Generate 4 images**, **Generate 8 images** and **Generate forever**. These work in Create, regular Edit and Surprise; the area editor makes one result at a time.
+The main button makes one image. Its arrow opens **Generate 4 images**, **Generate 8 images** and **Generate forever**. These work in Create and regular Edit; the area editor makes one result at a time.
 
-- Images are made one after another and saved as they finish. Create / Edit keep the starting inputs and settings; Surprise invents a new idea each time.
+- Images are made one after another and saved as they finish. Create / Edit keep the starting inputs and settings.
 - Leave the seed unlocked for random variations. A locked seed is reused for every image; unchanged inputs can repeat the same composition.
 - **Stop after this image** finishes the current image and stops the rest of a finite 4/8-image series.
 - **Cancel now** or **Esc** requests cancellation of the current run and stops the series. Images already completed remain saved.
@@ -165,7 +158,7 @@ Click a history thumbnail to select a result. Its description, size, seed, quali
 
 Click the result for an enlarged view; click again or press Esc to close it.
 
-For **regular photo edits**, the viewer has **Result**, **Side by side** and **Wipe**. Side by side displays the original and result together. Wipe lets you drag a divider over them. Use **Fit** or **100%**, or the mouse wheel to switch; at 100%, drag to move both views together. Different-sized images are displayed without cropping. Keep the original photo on disk so comparison can load it. This comparison toolbar is not currently available for Create, Surprise or area-edited results.
+For **regular photo edits**, the viewer has **Result**, **Side by side** and **Wipe**. Side by side displays the original and result together. Wipe lets you drag a divider over them. Use **Fit** or **100%**, or the mouse wheel to switch; at 100%, drag to move both views together. Different-sized images are displayed without cropping. Keep the original photo on disk so comparison can load it. This comparison toolbar is not currently available for Create results.
 
 **History is only for the current session**, with up to 60 recent thumbnails visible. Restarting the app clears this list. **Clear history** clears the list and preview, not your saved files. Use Open folder to find images from earlier sessions.
 

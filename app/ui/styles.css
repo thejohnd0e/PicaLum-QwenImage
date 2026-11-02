@@ -44,7 +44,7 @@ body {
   flex-direction: column;
   user-select: none;
 }
-textarea, input, .info-prompt, .idea p { user-select: text; }
+textarea, input, .info-prompt { user-select: text; }
 
 .mono { font-family: var(--font-mono); font-size: 11.5px; }
 .muted { color: var(--text-muted); }
@@ -215,7 +215,6 @@ input.mono { font-family: var(--font-mono); font-size: 12px; }
 .aspects button i { display: block; width: var(--w); height: var(--h); border: 1.5px solid currentColor; border-radius: 1px; }
 .aspects button:hover { border-color: var(--border-strong); color: var(--text); }
 .aspects button[aria-pressed="true"] { border-color: var(--text); color: var(--text); background: var(--sunken); }
-.ar-random { font-family: var(--font-sans) !important; font-size: 12px !important; }
 
 /* Calidad: una tarjeta compacta; plegada muestra solo el resumen */
 .quality-group details { border: 1px solid var(--border); border-radius: var(--r); background: var(--panel); overflow: hidden; }
@@ -244,7 +243,6 @@ input.mono { font-family: var(--font-mono); font-size: 12px; }
 .quality-group .num:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
 .quality-group .num.steps { width: 54px; }
 .quality-group .num.dim { width: 64px; }
-.quality-group .pair-auto { color: var(--text-faint); font: 12px var(--font-mono); }
 .quality-group .aside { margin-left: auto; color: var(--text-faint); font: 10.5px var(--font-mono); white-space: nowrap; }
 .quality-error { color: var(--err); font-size: 11px; }
 
@@ -288,8 +286,6 @@ input.mono { font-family: var(--font-mono); font-size: 12px; }
 }
 .prompt-preset-select:disabled { color: var(--text-faint); opacity: .65; }
 
-.idea { border: 1px solid var(--border); border-radius: var(--r); padding: 10px; display: grid; gap: 6px; background: var(--sunken); }
-.idea p { font-size: 12px; color: var(--text-muted); max-height: 120px; overflow-y: auto; }
 
 /* ── Escenario ── */
 .stage { grid-column: 2; grid-row: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; position: relative; }

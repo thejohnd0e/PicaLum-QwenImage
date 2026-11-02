@@ -19,7 +19,6 @@
     aspect: localGet("aspect", "1:1"),
     cfg: Number(localGet("cfg", "1")),
     denoisingStrength: Number(localGet("denoisingStrength", "0.75")),
-    surpriseAspect: "random",
     refs: [],
     engine: "off",
     engineExternal: false,
@@ -35,7 +34,6 @@
     compareZoom: "fit",
     comparePan: { x: 0.5, y: 0.5 },
     wipePosition: 50,
-    lastIdea: null,
     stepTimes: [],
     setup: null, // SetupInfo from Rust
     installing: false,
@@ -257,13 +255,12 @@
     state.mode = mode;
     document.querySelectorAll("[data-mode]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.mode === mode)));
     document.querySelectorAll("[data-show]").forEach((el) => { el.hidden = !el.dataset.show.split(" ").includes(mode); });
-    document.querySelectorAll("[data-only]").forEach((el) => { el.hidden = el.dataset.only !== mode; });
     renderModeHint();
     renderAspects();
-    quality.setContext({ mode, aspect: mode === "surprise" ? state.surpriseAspect : state.aspect, sourcePath: state.refs[0]?.path || null });
+    quality.setContext({ mode, aspect: state.aspect, sourcePath: state.refs[0]?.path || null });
     updateGenButton();
   }
-  function renderModeHint() { $("modeHint").textContent = t({ text: "hintText", photos: "hintPhotos", surprise: "hintSurprise" }[state.mode]); }
+  function renderModeHint() { $("modeHint").textContent = t({ text: "hintText", photos: "hintPhotos" }[state.mode]); }
   document.querySelectorAll("[data-mode]").forEach((b) => b.addEventListener("click", () => setMode(b.dataset.mode)));
 
   // Quality presets and manual generation settings are managed by quality-controls.js.
@@ -317,15 +314,14 @@
 
   // Format
   function renderAspects() {
-    const a = state.mode === "surprise" ? state.surpriseAspect : state.aspect;
-    document.querySelectorAll("#aspects [data-ar]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.ar === a)));
+    document.querySelectorAll("#aspects [data-ar]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.ar === state.aspect)));
   }
   document.querySelectorAll("#aspects [data-ar]").forEach((b) =>
     b.addEventListener("click", () => {
-      if (state.mode === "surprise") state.surpriseAspect = b.dataset.ar;
-      else { state.aspect = b.dataset.ar; localSet("aspect", state.aspect); }
+      state.aspect = b.dataset.ar;
+      localSet("aspect", state.aspect);
       renderAspects();
-      quality.setContext({ mode: state.mode, aspect: state.mode === "surprise" ? state.surpriseAspect : state.aspect, sourcePath: state.refs[0]?.path || null });
+      quality.setContext({ mode: state.mode, aspect: state.aspect, sourcePath: state.refs[0]?.path || null });
     }));
 
   // Seed
@@ -349,7 +345,7 @@
       renderRefs();
     }
     if (fresh.length) showRefPreview();
-    quality.setContext({ mode: state.mode, aspect: state.mode === "surprise" ? state.surpriseAspect : state.aspect, sourcePath: state.refs[0]?.path || null });
+    quality.setContext({ mode: state.mode, aspect: state.aspect, sourcePath: state.refs[0]?.path || null });
     updateGenButton();
   }
   // Turns a copy of the photo, never the user's file; the copy is what the engine gets.
@@ -400,7 +396,7 @@
   function currentPrompt() {
     if (state.mode === "text") return $("promptText").value.trim();
     if (state.mode === "photos") return $("promptPhotos").value.trim();
-    return "surprise";
+    return "";
   }
   function setGenerateMenu(open) {
     const menu = $("genMenu");
@@ -420,7 +416,6 @@
     else if (state.mode === "photos" && state.refs.length === 0) { label = t("needPhoto"); ok = false; }
     else if (!currentPrompt()) { label = state.mode === "photos" ? t("needInstr") : t("needDesc"); ok = false; }
     else if (!state.qualitySettings.valid) { label = t("qualityInvalid"); ok = false; }
-    else if (state.mode === "surprise") label = t("genSurprise");
     else if (state.mode === "photos") label = state.refs.length > 1 ? t("genWith", state.refs.length) : t("genEdit");
     btn.textContent = label;
     btn.disabled = !ok;
@@ -436,7 +431,7 @@
     $("settingsBtn").disabled = state.busy;
     const locked = state.busy || state.verification.state === "running";
     quality.setBusy(locked);
-    document.querySelectorAll("[data-mode], #promptText, #promptPhotos, #theme, #transparent, #seedLock, #seed, #cfg, #presets [data-preset], #aspects [data-ar]").forEach((el) => { el.disabled = locked; });
+    document.querySelectorAll("[data-mode], #promptText, #promptPhotos, #transparent, #seedLock, #seed, #cfg, #presets [data-preset], #aspects [data-ar]").forEach((el) => { el.disabled = locked; });
     document.querySelectorAll(".ref-add, .ref .rot, .ref .x").forEach((el) => { el.disabled = locked; });
     promptPresets.setDisabled(locked);
   }
@@ -517,8 +512,6 @@
       aspect: state.aspect,
       cfg: state.cfg,
       denoisingStrength: Number($("denoisingStrength").value),
-      surpriseAspect: state.surpriseAspect,
-      theme: $("theme").value || null,
       transparent: state.mode === "text" && $("transparent").checked,
       lockedSeed: $("seedLock").checked && $("seed").value ? Number($("seed").value) : null,
       seedLocked: $("seedLock").checked && !!$("seed").value,
@@ -534,16 +527,8 @@
     renderEngine();
 
     async function nextRequest() {
-      let prompt = snapshot.prompt;
-      let aspect = snapshot.aspect;
-      if (snapshot.mode === "surprise") {
-        const idea = await invoke("surprise_idea", { theme: snapshot.theme });
-        prompt = idea.prompt;
-        aspect = snapshot.surpriseAspect === "random" ? idea.aspect : snapshot.surpriseAspect;
-        state.lastIdea = prompt;
-        $("idea").hidden = false;
-        $("ideaTxt").textContent = prompt;
-      }
+      const prompt = snapshot.prompt;
+      const aspect = snapshot.aspect;
       return {
         mode: snapshot.mode,
         prompt,
@@ -898,12 +883,6 @@
       $("settingsSave").disabled = false;
     }
   });
-  $("ideaToText").addEventListener("click", () => {
-    if (!state.lastIdea) return;
-    $("promptText").value = state.lastIdea;
-    setMode("text");
-  });
-
   // Zoom
   $("shot").addEventListener("click", () => {
     if (!state.current || state.busy) return;

@@ -18,46 +18,37 @@
     let initialized = false;
     let busy = false;
 
-    const snapshot = () => {
-      const randomSurprise = context.mode === "surprise" && context.aspect === "random";
-      return {
-        preset: basePreset, steps: values.steps,
-        width: randomSurprise ? undefined : values.width,
-        height: randomSurprise ? undefined : values.height,
-        custom, valid: valid && !pending, pixelBudget: values.width && values.height ? values.width * values.height : undefined,
-      };
-    };
+    const snapshot = () => ({
+      preset: basePreset, steps: values.steps,
+      width: values.width, height: values.height,
+      custom, valid: valid && !pending, pixelBudget: values.width && values.height ? values.width * values.height : undefined,
+    });
     const save = () => storage.set?.(STORAGE_KEY, JSON.stringify({ preset: basePreset, ...values, custom }));
     const changed = () => { save(); render(); onChange(snapshot()); };
 
     function render() {
       const photo = context.mode === "photos";
-      const random = context.mode === "surprise" && context.aspect === "random";
       $("qualitySteps").value = valid || !$("qualitySteps").value ? String(values.steps) : $("qualitySteps").value;
-      $("qualityWidth").value = random ? "" : String(values.width ?? "");
-      $("qualityHeight").value = random ? "" : String(values.height ?? "");
-      $("qualityWidth").disabled = busy || photo || random;
-      $("qualityHeight").disabled = busy || photo || random;
+      $("qualityWidth").value = String(values.width ?? "");
+      $("qualityHeight").value = String(values.height ?? "");
+      $("qualityWidth").disabled = busy || photo;
+      $("qualityHeight").disabled = busy || photo;
       $("qualitySteps").disabled = busy;
-      $("qualitySizePair").hidden = random;
-      $("qualitySizeAuto").hidden = !random;
-      $("qualityStatus").hidden = random;
+      $("qualitySizePair").hidden = false;
       for (const [preset, id] of Object.entries(PRESET_IDS)) {
         $(id).setAttribute("aria-checked", String(!custom && basePreset === preset));
       }
       $("qualityStatus").textContent = photo
         ? (context.sourcePath ? translate("qualitySourceShort") : "")
         : `${megabytes()} MP`;
-      const lowResolution = !photo && !random && (values.width < 1024 || values.height < 1024);
-      $("qualityWarning").hidden = !photo && !random && !lowResolution;
+      const lowResolution = !photo && (values.width < 1024 || values.height < 1024);
+      $("qualityWarning").hidden = !photo && !lowResolution;
       $("qualityWarning").textContent = photo
         ? (context.sourcePath ? translate("qualityPhotoHint") : translate("qualityNoSource"))
-        : random ? translate("qualityRandomHint") : lowResolution ? translate("qualityLowResolution") : "";
+        : lowResolution ? translate("qualityLowResolution") : "";
       $("qualityError").textContent = valid ? "" : translate("qualityInvalid");
       $("qualityError").hidden = valid || pending;
-      const size = random
-        ? translate("qualityRandomShort")
-        : photo && !context.sourcePath ? translate("qualityNoSourceShort") : `${values.width}×${values.height}`;
+      const size = photo && !context.sourcePath ? translate("qualityNoSourceShort") : `${values.width}×${values.height}`;
       const presetName = custom ? translate("qualityCustom") : translate(PRESET_NAMES[basePreset]);
       $("qualitySummary").textContent = `${presetName} · ${values.steps} · ${size}`;
       $("qualityPresetMeta").textContent = custom ? translate("qualityCustomHint") : presetMeta();
@@ -74,9 +65,9 @@
 
     function request(preset = basePreset, overrides = {}) {
       return {
-        mode: context.mode === "surprise" || (context.mode === "photos" && !context.sourcePath) ? "text" : context.mode,
+        mode: context.mode === "photos" && !context.sourcePath ? "text" : context.mode,
         prompt: "", images: context.mode === "photos" && context.sourcePath ? [context.sourcePath] : [],
-        preset, aspect: context.aspect === "random" ? "1:1" : context.aspect,
+        preset, aspect: context.aspect,
         steps: overrides.steps, width: overrides.width, height: overrides.height,
       };
     }
@@ -110,13 +101,11 @@
       const previous = context;
       context = { ...context, ...next };
       const photo = context.mode === "photos";
-      const random = context.mode === "surprise" && context.aspect === "random";
-      const wasFixed = previous.mode !== "photos"
-        && !(previous.mode === "surprise" && previous.aspect === "random");
-      if (wasFixed && (photo || random)) fixedSize = { width: values.width, height: values.height };
+      const wasFixed = previous.mode !== "photos";
+      if (wasFixed && photo) fixedSize = { width: values.width, height: values.height };
 
       const overrides = { steps: values.steps };
-      if (!photo && !random) {
+      if (!photo) {
         const basis = !wasFixed && fixedSize ? fixedSize : { width: values.width, height: values.height };
         if (previous.aspect !== context.aspect) {
           const ratio = context.aspect.split(":").map(Number);
@@ -131,7 +120,7 @@
         }
       }
 
-      if ((photo && !context.sourcePath) || random) {
+      if (photo && !context.sourcePath) {
         serial++;
         pending = false;
         changed();
@@ -162,7 +151,7 @@
       input.setCustomValidity("");
       const next = { ...values, [field]: number };
       if (field === "width" || field === "height") {
-        const [ratioW, ratioH] = (context.aspect === "random" ? "1:1" : context.aspect).split(":").map(Number);
+        const [ratioW, ratioH] = context.aspect.split(":").map(Number);
         const paired = field === "width"
           ? Math.max(256, Math.round((number * ratioH / ratioW) / 32) * 32)
           : Math.max(256, Math.round((number * ratioW / ratioH) / 32) * 32);

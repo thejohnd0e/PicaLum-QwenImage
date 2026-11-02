@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.33 — 2026-11-02
+
+- Remove the desktop Surprise mode. The `qil surprise` CLI command remains available.
+
 ## 0.1.32 — 2026-11-02
 
 - Respect the "Create JSON metadata files" checkbox for Erase: metadata is embedded in the PNG and a JSON sidecar is written only when the option is enabled.

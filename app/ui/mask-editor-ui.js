@@ -43,6 +43,7 @@
     let lamaStatus = null; // { state: "missing" | "ready" | "invalid" }
     let lamaBusy = false;
     let lamaUnlisten = null;
+    let lamaSession = 0;
 
     const fmtBytes = (bytes) => {
       if (!bytes) return "0 MB";
@@ -439,6 +440,7 @@
 
     async function open() {
       if (isOpen()) return;
+      lamaSession += 1;
       const path = deps.getSourcePath();
       if (!path) return;
       opener = document.activeElement;
@@ -511,6 +513,7 @@
     }
 
     function closeNow() {
+      lamaSession += 1;
       observer?.disconnect();
       model.close();
       image = null;
@@ -545,12 +548,13 @@
     }
 
     async function refreshLama() {
+      const session = lamaSession;
       try {
         const status = await deps.invoke("lama_status");
-        if (!isOpen()) return;
+        if (!isOpen() || session !== lamaSession) return;
         lamaStatus = status;
       } catch (error) {
-        if (!isOpen()) return;
+        if (!isOpen() || session !== lamaSession) return;
         lamaStatus = { state: "invalid" };
         showError(String(error));
       }
@@ -559,6 +563,8 @@
 
     async function downloadLama() {
       if (lamaBusy || generating) return;
+      const session = lamaSession;
+      let unlisten = null;
       lamaBusy = true;
       showError("");
       setStatus(t("lamaDownloading"));
@@ -567,8 +573,8 @@
       lamaUnlisten = null;
       try {
         if (deps.listen) {
-          lamaUnlisten = await deps.listen("lama-download-progress", (event) => {
-            if (!isOpen()) return;
+          unlisten = await deps.listen("lama-download-progress", (event) => {
+            if (!isOpen() || session !== lamaSession) return;
             const progress = event.payload || {};
             const total = Number(progress.total) || 0;
             const percent = total ? Math.floor((Number(progress.done) / total) * 100) : 0;
@@ -576,10 +582,12 @@
               `${t("lamaDownloading")} ${percent}% · ${fmtBytes(progress.done)} / ${fmtBytes(total)}`,
             );
           });
+          lamaUnlisten = unlisten;
         }
         await deps.invoke("lama_download");
         const status = await deps.invoke("lama_status");
-        if (isOpen()) lamaStatus = status;
+        if (!isOpen() || session !== lamaSession) return;
+        lamaStatus = status;
         if (status?.state === "ready") {
           setStatus(t("lamaReady"));
         } else {
@@ -587,15 +595,17 @@
           showError(t("lamaDownloadFailed"));
         }
       } catch (error) {
-        if (isOpen()) {
+        if (isOpen() && session === lamaSession) {
           setStatus("");
           showError(String(error) || t("lamaDownloadFailed"));
         }
       } finally {
-        lamaUnlisten?.();
-        lamaUnlisten = null;
-        lamaBusy = false;
-        if (isOpen()) renderControls();
+        unlisten?.();
+        if (lamaUnlisten === unlisten) lamaUnlisten = null;
+        if (session === lamaSession) {
+          lamaBusy = false;
+          if (isOpen()) renderControls();
+        }
       }
     }
 

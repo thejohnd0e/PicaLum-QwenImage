@@ -257,6 +257,31 @@ test("Erase refuses an empty mask before calling the backend", async () => {
   editor.handleKeydown({ key: "Escape", preventDefault() {}, target: nodes.get("maskDialog") });
 });
 
+test("a late download completion cannot change a reopened dialog", async () => {
+  const status = { state: "missing" };
+  let finishDownload;
+  const { editor, nodes } = setup({
+    lamaStatus: status,
+    lamaDownload: () => new Promise((resolve) => {
+      finishDownload = () => {
+        status.state = "ready";
+        resolve();
+      };
+    }),
+  });
+  await editor.open();
+  const pending = nodes.get("maskDownload").listeners.click();
+  for (let i = 0; i < 10 && !finishDownload; i += 1) await Promise.resolve();
+  nodes.get("maskClose").listeners.click();
+  await editor.open();
+  assert.equal(nodes.get("maskErase").hidden, true);
+  finishDownload();
+  await pending;
+  assert.equal(nodes.get("maskErase").hidden, true);
+  assert.equal(nodes.get("maskDownload").hidden, false);
+  nodes.get("maskClose").listeners.click();
+});
+
 test("Erase reports an unavailable engine before calling the backend", async () => {
   let calls = 0;
   const { editor, nodes, images } = setup({

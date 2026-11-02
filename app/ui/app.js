@@ -799,7 +799,7 @@
   async function loadHistory() {
     try {
       const outputs = await invoke("list_outputs", { limit: 60 });
-      state.history = outputs.filter((item) => state.sessionOutputs.has(item.path));
+      state.history = outputs.filter((item) => item.meta);
       renderHistory();
       if (state.history[0]) showImage(state.history[0]);
       else if (state.current && !state.history.some((item) => item.path === state.current.path)) clearCurrentPreview();

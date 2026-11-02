@@ -257,6 +257,25 @@ test("Erase refuses an empty mask before calling the backend", async () => {
   editor.handleKeydown({ key: "Escape", preventDefault() {}, target: nodes.get("maskDialog") });
 });
 
+test("an old photo load cannot initialize a reopened dialog", async () => {
+  const { editor, nodes, images } = setup();
+  await editor.open();
+  nodes.get("maskClose").listeners.click();
+  await editor.open();
+  assert.equal(images.length, 2);
+
+  images[0].naturalWidth = 8;
+  images[0].naturalHeight = 8;
+  images[0].onload();
+  assert.equal(nodes.get("maskBrush").disabled, true, "the old image must not enable the new dialog");
+
+  images[1].naturalWidth = 8;
+  images[1].naturalHeight = 8;
+  images[1].onload();
+  assert.equal(nodes.get("maskBrush").disabled, false);
+  nodes.get("maskClose").listeners.click();
+});
+
 test("a late download completion cannot change a reopened dialog", async () => {
   const status = { state: "missing" };
   let finishDownload;
@@ -280,6 +299,27 @@ test("a late download completion cannot change a reopened dialog", async () => {
   assert.equal(nodes.get("maskErase").hidden, true);
   assert.equal(nodes.get("maskDownload").hidden, false);
   nodes.get("maskClose").listeners.click();
+});
+
+test("a second Erase click while encoding does not start a second backend run", async () => {
+  let calls = 0;
+  const { editor, nodes, images } = setup({
+    submitErase: async () => {
+      calls += 1;
+      return { ok: true };
+    },
+  });
+  await editor.open();
+  images[0].naturalWidth = 8;
+  images[0].naturalHeight = 8;
+  images[0].onload();
+  nodes.get("maskCanvas").listeners.pointerdown({ button: 0, pointerId: 1, clientX: 4, clientY: 4 });
+  const first = nodes.get("maskErase").listeners.click();
+  const second = nodes.get("maskErase").listeners.click();
+  await Promise.all([first, second]);
+
+  assert.equal(calls, 1);
+  assert.equal(editor.isOpen(), false);
 });
 
 test("Erase reports an unavailable engine before calling the backend", async () => {

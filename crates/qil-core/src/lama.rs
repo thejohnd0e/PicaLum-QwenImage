@@ -11,7 +11,7 @@ use serde::Serialize;
 
 use crate::config::Config;
 use crate::download::{self, Progress};
-use crate::generate::{should_save_json, unique_output_path};
+use crate::generate::unique_output_path;
 use crate::run_control::{RunControl, RunError};
 
 const WORKER: &str = include_str!("lama_worker.py");
@@ -49,8 +49,12 @@ pub fn model_path(cfg: &Config) -> PathBuf {
     cfg.models_dir.join("lama").join(MODEL_NAME)
 }
 
+fn staging_path(dest: &Path) -> PathBuf {
+    dest.with_extension("download")
+}
+
 fn part_path(dest: &Path) -> PathBuf {
-    dest.with_extension("pt.part")
+    staging_path(dest).with_extension("download.part")
 }
 
 /// Reports whether the exact pinned artifact is present and verified.
@@ -142,13 +146,21 @@ where
     if dest.exists() {
         std::fs::remove_file(dest).map_err(|e| e.to_string())?;
     }
-    fetch(url, dest, Some(expected_size), on_progress)?;
-    let sum = download::sha256(dest, on_progress)?;
+    // Download and verify in a staging file; only a verified artifact reaches
+    // the installed path.
+    let staging = staging_path(dest);
+    let _ = std::fs::remove_file(&staging);
+    fetch(url, &staging, Some(expected_size), on_progress)?;
+    let sum = download::sha256(&staging, on_progress)?;
     if !sum.eq_ignore_ascii_case(expected_sha) {
-        let _ = std::fs::remove_file(dest);
+        let _ = std::fs::remove_file(&staging);
         let _ = std::fs::remove_file(part_path(dest));
         return Err("LaMa model failed its checksum and was deleted; try again.".into());
     }
+    std::fs::rename(&staging, dest).map_err(|error| {
+        let _ = std::fs::remove_file(&staging);
+        error.to_string()
+    })?;
     Ok(())
 }
 
@@ -284,7 +296,6 @@ pub async fn erase(req: EraseRequest, options: EraseOptions<'_>) -> Result<Erase
         width,
         height,
         seconds,
-        cfg.save_json,
     )
     .map_err(RunError::Request)?;
     Ok(EraseResult {
@@ -302,7 +313,6 @@ fn publish_output(
     width: u32,
     height: u32,
     seconds: f64,
-    save_json: bool,
 ) -> Result<PathBuf, String> {
     std::fs::create_dir_all(output_dir).map_err(|error| error.to_string())?;
     let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
@@ -321,23 +331,27 @@ fn publish_output(
         let _ = std::fs::remove_file(&part);
         return Err(format!("Could not publish the erased image: {error}"));
     }
-    if should_save_json(save_json) {
-        let round1 = |x: f64| (x * 10.0).round() / 10.0;
-        let meta = serde_json::json!({
-            "prompt": "Erase",
-            "mode": "erase",
-            "model": "LaMa",
-            "width": width,
-            "height": height,
-            "seconds": round1(seconds),
-            "references": [source.to_string_lossy()],
-            "app": concat!("PicaLum QwenImage ", env!("CARGO_PKG_VERSION")),
-            "created": chrono::Local::now().to_rfc3339(),
-        });
-        let _ = std::fs::write(
-            dest.with_extension("json"),
-            serde_json::to_vec_pretty(&meta).unwrap(),
-        );
+    // Comparison metadata is part of the erase result, not an optional extra:
+    // without it a restart cannot recognize the source. If it cannot be written,
+    // remove the image rather than publish a result that loses its comparison.
+    let round1 = |x: f64| (x * 10.0).round() / 10.0;
+    let meta = serde_json::json!({
+        "prompt": "Erase",
+        "mode": "erase",
+        "model": "LaMa",
+        "width": width,
+        "height": height,
+        "seconds": round1(seconds),
+        "references": [source.to_string_lossy()],
+        "app": concat!("PicaLum QwenImage ", env!("CARGO_PKG_VERSION")),
+        "created": chrono::Local::now().to_rfc3339(),
+    });
+    let sidecar = dest.with_extension("json");
+    let bytes = serde_json::to_vec_pretty(&meta).map_err(|error| error.to_string())?;
+    if let Err(error) = std::fs::write(&sidecar, bytes) {
+        let _ = std::fs::remove_file(&dest);
+        let _ = std::fs::remove_file(&sidecar);
+        return Err(format!("Could not write the erase metadata: {error}"));
     }
     Ok(dest)
 }
@@ -416,6 +430,7 @@ mod tests {
         .unwrap();
         assert_eq!(calls, 1);
         assert_eq!(std::fs::read(&path).unwrap(), b"good");
+        assert!(!staging_path(&path).exists());
         assert_eq!(
             status_at(&path, 4, &expected).unwrap().state,
             LamaState::Ready
@@ -531,8 +546,8 @@ mod tests {
         let generated = dir.path().join("generated.png");
         png.save(&generated).unwrap();
 
-        let first = publish_output(&generated, &out, &source, 3, 2, 1.25, true).unwrap();
-        let second = publish_output(&generated, &out, &source, 3, 2, 1.25, true).unwrap();
+        let first = publish_output(&generated, &out, &source, 3, 2, 1.25).unwrap();
+        let second = publish_output(&generated, &out, &source, 3, 2, 1.25).unwrap();
         assert_ne!(first, second);
         assert!(first.exists() && second.exists());
         assert!(first.to_string_lossy().ends_with("_erase.png"));

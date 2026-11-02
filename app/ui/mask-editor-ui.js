@@ -485,11 +485,12 @@
       observer.observe($("maskStage"));
       resize();
       $("maskDialog").focus();
+      const session = lamaSession;
       await refreshLama();
-      if (!isOpen()) return;
+      if (!isOpen() || session !== lamaSession) return;
       const img = new Image();
       img.onload = () => {
-        if (!isOpen() || sourcePath !== path) return;
+        if (!isOpen() || session !== lamaSession || sourcePath !== path) return;
         image = img;
         const width = img.naturalWidth;
         const height = img.naturalHeight;
@@ -505,7 +506,7 @@
         $("maskBrush").focus();
       };
       img.onerror = () => {
-        if (!isOpen()) return;
+        if (!isOpen() || session !== lamaSession) return;
         deps.notify(t("maskLoadFailed"));
         closeNow();
       };
@@ -625,29 +626,43 @@
         showError(blocked);
         return;
       }
-      let maskPngBase64;
-      try {
-        maskPngBase64 = toBase64(await model.getMaskPng());
-      } catch (error) {
-        showError(String(error.message || error));
-        return;
-      }
+      const session = lamaSession;
+      const source = sourcePath;
       generating = true;
-      model.setBusy(true);
       stroking = false;
       $("maskDiscard").hidden = true;
       setStatus(t("erasing"));
       renderControls();
+      let maskPngBase64;
+      try {
+        maskPngBase64 = toBase64(await model.getMaskPng());
+      } catch (error) {
+        generating = false;
+        model.setBusy(false);
+        setStatus("");
+        if (isOpen()) {
+          showError(String(error.message || error));
+          renderControls();
+        }
+        return;
+      }
+      if (!isOpen() || session !== lamaSession || sourcePath !== source) {
+        generating = false;
+        model.setBusy(false);
+        return;
+      }
+      model.setBusy(true);
+      renderControls();
       let outcome;
       try {
-        outcome = await deps.submitErase({ sourcePath, maskPngBase64 });
+        outcome = await deps.submitErase({ sourcePath: source, maskPngBase64 });
       } catch (error) {
         outcome = { error: String(error) };
       }
       generating = false;
       model.setBusy(false);
       setStatus("");
-      if (!isOpen()) return;
+      if (!isOpen() || session !== lamaSession || sourcePath !== source) return;
       if (outcome && outcome.ok) {
         closeNow();
         return;

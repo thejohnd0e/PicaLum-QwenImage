@@ -466,6 +466,61 @@ mod tests {
         assert!(mask_has_pixels(&std::fs::read(&path).unwrap()).unwrap());
     }
 
+    #[tokio::test]
+    #[ignore = "requires LAMA_TEST_MODEL and runs the real TorchScript model"]
+    async fn real_cpu_erase_publishes_a_source_sized_composite() {
+        let model = std::env::var("LAMA_TEST_MODEL").expect("LAMA_TEST_MODEL");
+        let dir = tempfile::tempdir().unwrap();
+        let cfg = Config {
+            runtime_dir: crate::config::default_runtime_dir(),
+            models_dir: dir.path().join("models"),
+            output_dir: dir.path().join("out"),
+            ..Config::default()
+        };
+        std::fs::create_dir_all(cfg.models_dir.join("lama")).unwrap();
+        std::fs::copy(model, model_path(&cfg)).unwrap();
+
+        let source = dir.path().join("source.png");
+        let mut image = image::RgbImage::from_pixel(64, 64, image::Rgb([40, 120, 60]));
+        for x in 20..44 {
+            for y in 20..44 {
+                image.put_pixel(x, y, image::Rgb([200, 20, 20]));
+            }
+        }
+        image.save(&source).unwrap();
+        let mut mask = image::GrayImage::from_pixel(64, 64, image::Luma([0u8]));
+        for x in 20..44 {
+            for y in 20..44 {
+                mask.put_pixel(x, y, image::Luma([255u8]));
+            }
+        }
+        let mask_path = dir.path().join("mask.png");
+        mask.save(&mask_path).unwrap();
+
+        let (_cancel, cancel_rx) = tokio::sync::watch::channel(false);
+        let result = erase(
+            EraseRequest {
+                source_path: source,
+                mask_png: std::fs::read(&mask_path).unwrap(),
+            },
+            EraseOptions {
+                config: &cfg,
+                control: RunControl::new(
+                    cancel_rx,
+                    tokio::time::Instant::now() + std::time::Duration::from_secs(300),
+                ),
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!((result.width, result.height), (64, 64));
+        let output = image::open(&result.path).unwrap().to_rgb8();
+        assert_eq!(output.get_pixel(0, 0), image.get_pixel(0, 0));
+        assert_ne!(output.get_pixel(32, 32), image.get_pixel(32, 32));
+        assert!(result.path.ends_with("_erase.png"));
+    }
+
     #[test]
     fn publishing_never_overwrites_and_writes_erase_metadata() {
         let dir = tempfile::tempdir().unwrap();

@@ -1,7 +1,9 @@
 (() => {
   const PRESETS = new Set(["draft", "standard", "max"]);
   const PRESET_IDS = { draft: "qualityPresetDraft", standard: "qualityPresetStandard", max: "qualityPresetMax" };
+  const PRESET_NAMES = { draft: "pDraft", standard: "pStandard", max: "pMax" };
   const STORAGE_KEY = "quality.settings";
+  const OPEN_KEY = "quality.open";
 
   function create({ getElement, invoke, translate = (key) => key, storage = {}, onChange = () => {} }) {
     const $ = getElement;
@@ -11,6 +13,7 @@
     let valid = true;
     let pending = false;
     let custom = false;
+    let fixedSize = null;
     let serial = 0;
     let initialized = false;
     let busy = false;
@@ -28,33 +31,45 @@
     const changed = () => { save(); render(); onChange(snapshot()); };
 
     function render() {
-      $("qualitySteps").value = valid || !$("qualitySteps").value ? String(values.steps) : $("qualitySteps").value;
-      if (context.mode === "surprise" && context.aspect === "random") {
-        $("qualityWidth").value = "";
-        $("qualityHeight").value = "";
-      } else {
-        $("qualityWidth").value = String(values.width ?? "");
-        $("qualityHeight").value = String(values.height ?? "");
-      }
       const photo = context.mode === "photos";
       const random = context.mode === "surprise" && context.aspect === "random";
+      $("qualitySteps").value = valid || !$("qualitySteps").value ? String(values.steps) : $("qualitySteps").value;
+      $("qualityWidth").value = random ? "" : String(values.width ?? "");
+      $("qualityHeight").value = random ? "" : String(values.height ?? "");
       $("qualityWidth").disabled = busy || photo || random;
       $("qualityHeight").disabled = busy || photo || random;
       $("qualitySteps").disabled = busy;
-      $("qualityCustom").hidden = !custom;
+      $("qualitySizePair").hidden = random;
+      $("qualitySizeAuto").hidden = !random;
+      $("qualityStatus").hidden = random;
       for (const [preset, id] of Object.entries(PRESET_IDS)) {
         $(id).setAttribute("aria-checked", String(!custom && basePreset === preset));
       }
-      if (photo && context.sourcePath) $("qualityStatus").textContent = translate("qualitySourceSize", values.width, values.height);
-      else if (photo) $("qualityStatus").textContent = translate("qualityNoSource");
-      else if (random) $("qualityStatus").textContent = translate("qualityRandomSize", (values.width * values.height).toLocaleString());
-      else $("qualityStatus").textContent = translate("qualityDimensions", values.width, values.height);
-      $("qualityError").textContent = valid ? "" : translate("qualityInvalid");
-      $("qualityError").hidden = valid || pending;
+      $("qualityStatus").textContent = photo
+        ? (context.sourcePath ? translate("qualitySourceShort") : "")
+        : `${megabytes()} MP`;
       const lowResolution = !photo && !random && (values.width < 1024 || values.height < 1024);
       $("qualityWarning").hidden = !photo && !random && !lowResolution;
-      $("qualityWarning").textContent = photo ? translate("qualityPhotoHint") : random ? translate("qualityRandomHint") : lowResolution ? translate("qualityLowResolution") : "";
-      $("qualitySummary").textContent = translate("qualitySummary", values.steps, values.width, values.height);
+      $("qualityWarning").textContent = photo
+        ? (context.sourcePath ? translate("qualityPhotoHint") : translate("qualityNoSource"))
+        : random ? translate("qualityRandomHint") : lowResolution ? translate("qualityLowResolution") : "";
+      $("qualityError").textContent = valid ? "" : translate("qualityInvalid");
+      $("qualityError").hidden = valid || pending;
+      const size = random
+        ? translate("qualityRandomShort")
+        : photo && !context.sourcePath ? translate("qualityNoSourceShort") : `${values.width}×${values.height}`;
+      const presetName = custom ? translate("qualityCustom") : translate(PRESET_NAMES[basePreset]);
+      $("qualitySummary").textContent = `${presetName} · ${values.steps} · ${size}`;
+      $("qualityPresetMeta").textContent = custom ? translate("qualityCustomHint") : presetMeta();
+    }
+
+    function presetMeta() {
+      const button = $(PRESET_IDS[basePreset]);
+      return (context.mode === "photos" ? button.dataset.e : button.dataset.t) || "";
+    }
+
+    function megabytes() {
+      return ((values.width * values.height) / 1_000_000).toFixed(1);
     }
 
     function request(preset = basePreset, overrides = {}) {
@@ -94,28 +109,35 @@
     async function setContext(next) {
       const previous = context;
       context = { ...context, ...next };
-      const overrides = context.mode === "photos" ? { steps: values.steps } : {};
-      if (previous.aspect !== context.aspect && context.mode !== "photos" && context.aspect !== "random") {
-        const ratio = context.aspect.split(":").map(Number);
-        const area = values.width * values.height;
-        const width = Math.max(256, Math.round(Math.sqrt(area * ratio[0] / ratio[1]) / 32) * 32);
-        const height = Math.max(256, Math.round((area / width) / 32) * 32);
-        overrides.width = width;
-        overrides.height = height;
+      const photo = context.mode === "photos";
+      const random = context.mode === "surprise" && context.aspect === "random";
+      const wasFixed = previous.mode !== "photos"
+        && !(previous.mode === "surprise" && previous.aspect === "random");
+      if (wasFixed && (photo || random)) fixedSize = { width: values.width, height: values.height };
+
+      const overrides = { steps: values.steps };
+      if (!photo && !random) {
+        const basis = !wasFixed && fixedSize ? fixedSize : { width: values.width, height: values.height };
+        if (previous.aspect !== context.aspect) {
+          const ratio = context.aspect.split(":").map(Number);
+          const area = basis.width * basis.height;
+          const width = Math.max(256, Math.round(Math.sqrt(area * ratio[0] / ratio[1]) / 32) * 32);
+          const height = Math.max(256, Math.round((area / width) / 32) * 32);
+          overrides.width = width;
+          overrides.height = height;
+        } else {
+          overrides.width = basis.width;
+          overrides.height = basis.height;
+        }
       }
-      if (context.mode === "photos" && !context.sourcePath) {
-        serial++;
-        changed();
-      } else if (context.mode === "photos" && context.sourcePath) {
-        const ok = await resolve(basePreset, overrides);
-        if (ok) changed();
-      } else if (context.aspect !== "random") {
-        const ok = await resolve(basePreset, overrides);
-        if (ok) changed();
-      } else {
+
+      if ((photo && !context.sourcePath) || random) {
         serial++;
         pending = false;
         changed();
+      } else {
+        const ok = await resolve(basePreset, overrides);
+        if (ok) changed();
       }
       render();
     }
@@ -162,6 +184,8 @@
 
     async function init(initialContext) {
       context = { ...context, ...initialContext };
+      const details = $("qualityPresets");
+      if (details) details.open = storage.get?.(OPEN_KEY) === "1";
       let saved = null;
       try { saved = JSON.parse(storage.get?.(STORAGE_KEY) || "null"); } catch { saved = null; }
       const legacyPreset = storage.get?.("preset");
@@ -192,6 +216,9 @@
     for (const field of ["steps", "width", "height"]) $(
       `quality${field[0].toUpperCase()}${field.slice(1)}`,
     ).addEventListener("input", () => edit(field));
+    $("qualityPresets").addEventListener("toggle", () => {
+      storage.set?.(OPEN_KEY, $("qualityPresets").open ? "1" : "0");
+    });
 
     function setBusy(value) {
       const next = Boolean(value);

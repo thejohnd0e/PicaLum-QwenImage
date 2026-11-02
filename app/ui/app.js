@@ -256,7 +256,6 @@
     document.querySelectorAll("[data-show]").forEach((el) => { el.hidden = !el.dataset.show.split(" ").includes(mode); });
     document.querySelectorAll("[data-only]").forEach((el) => { el.hidden = el.dataset.only !== mode; });
     renderModeHint();
-    document.querySelectorAll("#presets [data-preset] .p-meta").forEach((meta) => { meta.textContent = mode === "photos" ? meta.dataset.e : meta.dataset.t; });
     renderAspects();
     quality.setContext({ mode, aspect: mode === "surprise" ? state.surpriseAspect : state.aspect, sourcePath: state.refs[0]?.path || null });
     updateGenButton();

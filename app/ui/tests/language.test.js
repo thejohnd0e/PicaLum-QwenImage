@@ -40,6 +40,18 @@ test("an explicitly saved optional language is restored", () => {
   assert.equal(loadLanguage("es", "en-US"), "es");
 });
 
+test("every translation key used by the shipped HTML exists in all supported languages", () => {
+  const i18n = loadTranslations();
+  const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+  const keys = new Set();
+  for (const match of html.matchAll(/data-i18n(?:-aria|-ph|-html)?="([^"]+)"/g)) keys.add(match[1]);
+  assert.ok(keys.size > 50);
+  for (const language of ["en", "ru", "es"]) {
+    i18n.set(language);
+    for (const key of keys) assert.ok(i18n.has(key), `${language} is missing ${key}`);
+  }
+});
+
 test("hold-to-compare mode and instruction are translated in every supported language", () => {
   const i18n = loadTranslations();
   const values = {

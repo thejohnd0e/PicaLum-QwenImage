@@ -255,49 +255,66 @@
 
         <section class="group quality-group">
           <details id="qualityPresets">
-            <summary><span class="label" data-i18n="qualityPresets"></span><span class="quality-summary mono" id="qualitySummary"></span></summary>
-            <div class="presets" id="presets" role="radiogroup">
-            <button id="qualityPresetDraft" type="button" role="radio" data-preset="draft" aria-checked="false">
-              <span class="p-name" data-i18n="pDraft"></span><span class="p-meta mono" data-t="1024² · 20 · ~35 s" data-e="1024 px · 20 · ~50 s"></span>
-            </button>
-            <button id="qualityPresetStandard" type="button" role="radio" data-preset="standard" aria-checked="true">
-              <span class="p-name" data-i18n="pStandard"></span><span class="p-meta mono" data-t="1.6 MP · 30 · ~1.5 min" data-e="1280 px · 30 · ~2.5 min"></span>
-            </button>
-            <button id="qualityPresetMax" type="button" role="radio" data-preset="max" aria-checked="false">
-              <span class="p-name" data-i18n="pMax"></span><span class="p-meta mono" data-t="2K · 40 · ~7 min" data-e="1536 px · 40 · ~5 min"></span>
-            </button>
+            <summary>
+              <span class="label" data-i18n="qualityPresets"></span>
+              <span class="quality-summary mono" id="qualitySummary"></span>
+              <span class="chev" aria-hidden="true"></span>
+            </summary>
+            <div class="segwrap">
+              <div class="seg" id="presets" role="radiogroup" aria-label="Quality presets" data-i18n-aria="qualityPresets">
+                <button id="qualityPresetDraft" type="button" role="radio" data-preset="draft" aria-checked="false" data-t="1024² · 20 · ~35 s" data-e="1024 px · 20 · ~50 s" data-i18n="pDraft"></button>
+                <button id="qualityPresetStandard" type="button" role="radio" data-preset="standard" aria-checked="true" data-t="1.6 MP · 30 · ~1.5 min" data-e="1280 px · 30 · ~2.5 min" data-i18n="pStandard"></button>
+                <button id="qualityPresetMax" type="button" role="radio" data-preset="max" aria-checked="false" data-t="2K · 40 · ~7 min" data-e="1536 px · 40 · ~5 min" data-i18n="pMax"></button>
+              </div>
+              <p class="seg-meta mono" id="qualityPresetMeta"></p>
             </div>
-            <p class="hint mono" data-i18n="presetLegend"></p>
+            <div class="params">
+              <div class="param">
+                <label for="qualitySteps" data-i18n="qualitySteps"></label>
+                <input id="qualitySteps" class="num steps" type="number" min="1" max="100" step="1" value="30">
+              </div>
+              <div class="param">
+                <label for="qualityWidth" data-i18n="qualitySize"></label>
+                <div class="pair" id="qualitySizePair">
+                  <input id="qualityWidth" class="num dim" type="number" min="256" max="4096" step="32" value="1280" data-i18n-aria="qualityWidth">
+                  <span class="x" aria-hidden="true">×</span>
+                  <input id="qualityHeight" class="num dim" type="number" min="256" max="4096" step="32" value="1280" data-i18n-aria="qualityHeight">
+                </div>
+                <span class="pair-auto" id="qualitySizeAuto" data-i18n="qualityRandomShort" hidden></span>
+                <span class="aside mono" id="qualityStatus" aria-live="polite"></span>
+              </div>
+            </div>
           </details>
-          <div class="quality-manual">
-            <div class="quality-custom" id="qualityCustom" data-i18n="qualityCustom" hidden></div>
-            <label for="qualitySteps" data-i18n="qualitySteps"></label>
-            <input id="qualitySteps" type="number" min="1" max="100" step="1" value="30">
-            <div class="quality-dimensions">
-              <div><label for="qualityWidth" data-i18n="qualityWidth"></label><input id="qualityWidth" type="number" min="256" max="4096" step="32" value="1280"></div>
-              <div><label for="qualityHeight" data-i18n="qualityHeight"></label><input id="qualityHeight" type="number" min="256" max="4096" step="32" value="1280"></div>
-            </div>
-            <p class="hint mono" id="qualityStatus" aria-live="polite"></p>
-            <p class="hint" id="qualityWarning" hidden></p>
-            <p class="quality-error" id="qualityError" role="alert" hidden></p>
-          </div>
+          <p class="hint" id="qualityWarning" hidden></p>
+          <p class="quality-error" id="qualityError" role="alert" hidden></p>
         </section>
 
         <section class="group">
-          <label class="label" for="cfg" data-i18n="cfgScale"></label>
-          <div class="cfg-controls">
-            <input id="cfg" type="range" min="1" max="5" step="0.1" value="1" aria-label="CFG Scale">
-            <input id="cfgNumber" type="number" min="1" max="5" step="0.1" value="1.0" aria-label="CFG Scale value">
-          </div>
-              <p class="hint" data-i18n="cfgHint"></p>
-              <div class="photo-denoising" id="photoDenoisingControls" data-show="photos" hidden>
-                <label class="label" for="denoisingStrength" data-i18n="denoisingStrength"></label>
-                <div class="cfg-controls">
-                  <input id="denoisingStrength" type="range" min="0.10" max="1.00" step="0.01" value="0.75" aria-label="Denoising Strength">
-                  <input id="denoisingStrengthNumber" type="number" min="0.10" max="1.00" step="0.01" value="0.75" aria-label="Denoising Strength value">
-                </div>
-                <p class="hint" data-i18n="denoisingHint"></p>
+          <div class="cfg-seed-row">
+            <div class="cfg-col">
+              <label class="label" for="cfg" data-i18n="cfgScale"></label>
+              <div class="cfg-controls">
+                <input id="cfg" type="range" min="1" max="5" step="0.1" value="1" aria-label="CFG Scale">
+                <input id="cfgNumber" type="number" min="1" max="5" step="0.1" value="1.0" aria-label="CFG Scale value">
               </div>
+            </div>
+            <div class="seed-col">
+              <div class="label-row">
+                <label class="label" for="seed" data-i18n="seed"></label>
+                <label class="check check-sm"><input type="checkbox" id="seedLock"> <span data-i18n="lock"></span></label>
+              </div>
+              <input id="seed" type="text" inputmode="numeric" class="mono" data-i18n-ph="seedPh" disabled>
+            </div>
+            <p class="hint cfg-seed-hint" data-i18n="cfgHint"></p>
+          </div>
+          <div class="photo-denoising" id="photoDenoisingControls" data-show="photos" hidden>
+            <label class="label" for="denoisingStrength" data-i18n="denoisingStrength"></label>
+            <div class="cfg-controls">
+              <input id="denoisingStrength" type="range" min="0.10" max="1.00" step="0.01" value="0.75" aria-label="Denoising Strength">
+              <input id="denoisingStrengthNumber" type="number" min="0.10" max="1.00" step="0.01" value="0.75" aria-label="Denoising Strength value">
+            </div>
+            <p class="hint" data-i18n="denoisingHint"></p>
+          </div>
         </section>
 
         <section class="group" data-show="text surprise">
@@ -314,13 +331,6 @@
           </div>
         </section>
 
-        <section class="group">
-          <div class="label-row">
-            <label class="label" for="seed" data-i18n="seed"></label>
-            <label class="check check-sm"><input type="checkbox" id="seedLock"> <span data-i18n="lock"></span></label>
-          </div>
-          <input id="seed" type="text" inputmode="numeric" class="mono" data-i18n-ph="seedPh" disabled>
-        </section>
       </div>
 
       <div class="panel-foot">

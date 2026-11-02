@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.26 — 2026-11-02
+
+- Redesign the quality block as one compact card: Draft / Standard / Max as a segmented control, a one-line summary when collapsed, and 30 px inline Steps and Size fields instead of full-width inputs. The open state is remembered.
+- Put CFG Scale and Seed on one row and size the seed field to a 15-digit value. In Surprise/Random, Size shows "auto" instead of two empty boxes.
+- Keep custom steps and size when switching modes or restarting; they no longer silently reset to the preset.
+- Fix missing translations for the quality controls and preset names (0.1.25 displayed raw keys); add a test that every key used by the shipped HTML exists in all three languages.
+
 ## 0.1.25 — 2026-11-02
 
 - Compact the desktop quality controls with collapsible presets and editable generation steps and dimensions; validate custom values before generation and show source-derived photo dimensions.

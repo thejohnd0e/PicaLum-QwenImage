@@ -19,7 +19,7 @@
       hooks.begin();
       try {
         const r = await invoke("generate_masked_edit", {
-          args: { sourcePath, maskPngBase64, instruction, preset, seed, featherPx, featherMode, cfg, denoisingStrength: strength, references },
+          args: { sourcePath, maskPngBase64, instruction, preset, steps: deps.getSteps?.() ?? null, seed, featherPx, featherMode, cfg, denoisingStrength: strength, references },
         });
         const item = {
           path: r.path,
@@ -27,6 +27,7 @@
             mode: "masked-edit",
             prompt: instruction,
             preset,
+            steps: r.steps,
             cfg,
             denoisingStrength: strength,
             featherMode,

@@ -15,6 +15,7 @@
   const state = {
     mode: "text",
     preset: localGet("preset", "standard"),
+    qualitySettings: { valid: true },
     aspect: localGet("aspect", "1:1"),
     cfg: Number(localGet("cfg", "1")),
     denoisingStrength: Number(localGet("denoisingStrength", "0.75")),
@@ -76,6 +77,18 @@
   const fmtBytes = (b) => (b >= 1073741824 ? (b / 1073741824).toFixed(1) + " GB" : Math.round(b / 1048576) + " MB");
   const fmtSecs = (s) => (s >= 60 ? `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, "0")} s` : `${s} s`);
   const verification = QilVerification({ invoke, listen, storage: { get: (k) => localGet("verification.started", ""), set: (k, v) => localSet("verification.started", v) }, key: () => verificationKey(), canStart: () => !state.busy, onState: (next) => { state.verification = next; renderVerification(); updateGenButton(); } });
+  const quality = window.QilQualityControls.create({
+    getElement: $,
+    invoke,
+    translate: t,
+    storage: { get: (key) => localGet(key, null), set: (key, value) => localSet(key, value) },
+    onChange: (settings) => {
+      state.qualitySettings = settings;
+      state.preset = settings.preset;
+      localSet("preset", settings.preset);
+      updateGenButton();
+    },
+  });
 
   // ═════════ Setup (first run) ═════════
 
@@ -243,23 +256,15 @@
     document.querySelectorAll("[data-show]").forEach((el) => { el.hidden = !el.dataset.show.split(" ").includes(mode); });
     document.querySelectorAll("[data-only]").forEach((el) => { el.hidden = el.dataset.only !== mode; });
     renderModeHint();
-    renderPresets();
+    document.querySelectorAll("#presets [data-preset] .p-meta").forEach((meta) => { meta.textContent = mode === "photos" ? meta.dataset.e : meta.dataset.t; });
     renderAspects();
+    quality.setContext({ mode, aspect: mode === "surprise" ? state.surpriseAspect : state.aspect, sourcePath: state.refs[0]?.path || null });
     updateGenButton();
   }
   function renderModeHint() { $("modeHint").textContent = t({ text: "hintText", photos: "hintPhotos", surprise: "hintSurprise" }[state.mode]); }
   document.querySelectorAll("[data-mode]").forEach((b) => b.addEventListener("click", () => setMode(b.dataset.mode)));
 
-  // Quality
-  function renderPresets() {
-    document.querySelectorAll("#presets [data-preset]").forEach((b) => {
-      b.setAttribute("aria-checked", String(b.dataset.preset === state.preset));
-      const meta = b.querySelector(".p-meta");
-      meta.textContent = state.mode === "photos" ? meta.dataset.e : meta.dataset.t;
-    });
-  }
-  document.querySelectorAll("#presets [data-preset]").forEach((b) =>
-    b.addEventListener("click", () => { state.preset = b.dataset.preset; localSet("preset", state.preset); renderPresets(); updateGenButton(); }));
+  // Quality presets and manual generation settings are managed by quality-controls.js.
 
   const initialCfg = Number.isFinite(state.cfg) ? Math.min(5, Math.max(1, state.cfg)) : 1;
   $("cfg").value = String(initialCfg);
@@ -318,6 +323,7 @@
       if (state.mode === "surprise") state.surpriseAspect = b.dataset.ar;
       else { state.aspect = b.dataset.ar; localSet("aspect", state.aspect); }
       renderAspects();
+      quality.setContext({ mode: state.mode, aspect: state.mode === "surprise" ? state.surpriseAspect : state.aspect, sourcePath: state.refs[0]?.path || null });
     }));
 
   // Seed
@@ -340,6 +346,7 @@
       try { ref.thumb = await invoke("thumbnail", { path, size: 240 }); } catch (e) { notify(String(e)); }
       renderRefs();
     }
+    quality.setContext({ mode: state.mode, aspect: state.mode === "surprise" ? state.surpriseAspect : state.aspect, sourcePath: state.refs[0]?.path || null });
     updateGenButton();
   }
   // Turns a copy of the photo, never the user's file; the copy is what the engine gets.
@@ -402,6 +409,7 @@
     else if (state.mode === "photos" && !$("denoisingStrengthNumber").checkValidity()) { ok = false; }
     else if (state.mode === "photos" && state.refs.length === 0) { label = t("needPhoto"); ok = false; }
     else if (!currentPrompt()) { label = state.mode === "photos" ? t("needInstr") : t("needDesc"); ok = false; }
+    else if (!state.qualitySettings.valid) { label = t("qualityInvalid"); ok = false; }
     else if (state.mode === "surprise") label = t("genSurprise");
     else if (state.mode === "photos") label = state.refs.length > 1 ? t("genWith", state.refs.length) : t("genEdit");
     btn.textContent = label;
@@ -417,6 +425,7 @@
     $("clearHistoryBtn").disabled = state.busy || state.history.length === 0;
     $("settingsBtn").disabled = state.busy;
     const locked = state.busy || state.verification.state === "running";
+    quality.setBusy(locked);
     document.querySelectorAll("[data-mode], #promptText, #promptPhotos, #theme, #transparent, #seedLock, #seed, #cfg, #presets [data-preset], #aspects [data-ar]").forEach((el) => { el.disabled = locked; });
     document.querySelectorAll(".ref-add, .ref .rot, .ref .x").forEach((el) => { el.disabled = locked; });
     promptPresets.setDisabled(locked);
@@ -476,6 +485,7 @@
   // Generate
   async function generate(count = 1) {
     if ($("genBtn").disabled || state.verification.state === "running") return;
+    if (!state.qualitySettings.valid) { $("qualitySteps").reportValidity(); return; }
     if (!Number.isFinite(state.cfg) || state.cfg < 1 || state.cfg > 5 || !$("cfgNumber").checkValidity()) {
       $("cfgNumber").setCustomValidity(t("cfgInvalid"));
       $("cfgNumber").reportValidity();
@@ -491,6 +501,9 @@
       prompt: currentPrompt(),
       images: state.mode === "photos" ? state.refs.map((r) => r.path) : [],
       preset: state.preset,
+      steps: state.qualitySettings.steps,
+      width: state.qualitySettings.width,
+      height: state.qualitySettings.height,
       aspect: state.aspect,
       cfg: state.cfg,
       denoisingStrength: Number($("denoisingStrength").value),
@@ -526,6 +539,9 @@
         prompt,
         images: snapshot.images,
         preset: snapshot.preset,
+        steps: snapshot.steps,
+        width: snapshot.mode === "photos" ? null : snapshot.width ?? null,
+        height: snapshot.mode === "photos" ? null : snapshot.height ?? null,
         aspect,
         seed: QilBatch.requestSeed(plan),
         transparent: snapshot.transparent,
@@ -535,7 +551,7 @@
     }
 
     const appendResult = (r, req) => {
-      const item = { path: r.path, meta: { ...req, seed: r.seed, width: r.width, height: r.height, seconds: r.seconds, references: req.images } };
+      const item = { path: r.path, meta: { ...req, seed: r.seed, steps: r.steps, width: r.width, height: r.height, seconds: r.seconds, references: req.images } };
       state.sessionOutputs.add(item.path);
       state.history.unshift(item);
       showImage(item);
@@ -600,6 +616,7 @@
     translate: t,
     lockedSeed: () => ($("seedLock").checked && $("seed").value ? Number($("seed").value) : null),
     getCfg: () => state.cfg,
+    getSteps: () => state.qualitySettings.steps,
     hooks: {
       begin() {
         hideNotice();
@@ -888,6 +905,7 @@
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeLangMenu(); });
   window.addEventListener("langchange", () => {
     renderModeHint();
+    quality.render();
     promptPresets.render({ preserveForm: true });
     renderRefs();
     renderHistory();
@@ -928,6 +946,7 @@
   // Boot
   (async () => {
     window.i18n.apply();
+    await quality.init({ mode: "text", aspect: state.aspect, sourcePath: null });
     invoke("app_version").then((version) => {
       if (typeof version === "string" && version) $("appVersion").textContent = `v${version}`;
     }).catch(() => {});

@@ -253,20 +253,34 @@
           </div>
         </section>
 
-        <section class="group">
-          <span class="label" data-i18n="quality"></span>
-          <div class="presets" id="presets" role="radiogroup">
-            <button type="button" role="radio" data-preset="draft" aria-checked="false">
+        <section class="group quality-group">
+          <details id="qualityPresets">
+            <summary><span class="label" data-i18n="qualityPresets"></span><span class="quality-summary mono" id="qualitySummary"></span></summary>
+            <div class="presets" id="presets" role="radiogroup">
+            <button id="qualityPresetDraft" type="button" role="radio" data-preset="draft" aria-checked="false">
               <span class="p-name" data-i18n="pDraft"></span><span class="p-meta mono" data-t="1024² · 20 · ~35 s" data-e="1024 px · 20 · ~50 s"></span>
             </button>
-            <button type="button" role="radio" data-preset="standard" aria-checked="true">
+            <button id="qualityPresetStandard" type="button" role="radio" data-preset="standard" aria-checked="true">
               <span class="p-name" data-i18n="pStandard"></span><span class="p-meta mono" data-t="1.6 MP · 30 · ~1.5 min" data-e="1280 px · 30 · ~2.5 min"></span>
             </button>
-            <button type="button" role="radio" data-preset="max" aria-checked="false">
+            <button id="qualityPresetMax" type="button" role="radio" data-preset="max" aria-checked="false">
               <span class="p-name" data-i18n="pMax"></span><span class="p-meta mono" data-t="2K · 40 · ~7 min" data-e="1536 px · 40 · ~5 min"></span>
             </button>
+            </div>
+            <p class="hint mono" data-i18n="presetLegend"></p>
+          </details>
+          <div class="quality-manual">
+            <div class="quality-custom" id="qualityCustom" data-i18n="qualityCustom" hidden></div>
+            <label for="qualitySteps" data-i18n="qualitySteps"></label>
+            <input id="qualitySteps" type="number" min="1" max="100" step="1" value="30">
+            <div class="quality-dimensions">
+              <div><label for="qualityWidth" data-i18n="qualityWidth"></label><input id="qualityWidth" type="number" min="256" max="4096" step="32" value="1280"></div>
+              <div><label for="qualityHeight" data-i18n="qualityHeight"></label><input id="qualityHeight" type="number" min="256" max="4096" step="32" value="1280"></div>
+            </div>
+            <p class="hint mono" id="qualityStatus" aria-live="polite"></p>
+            <p class="hint" id="qualityWarning" hidden></p>
+            <p class="quality-error" id="qualityError" role="alert" hidden></p>
           </div>
-          <p class="hint mono" data-i18n="presetLegend"></p>
         </section>
 
         <section class="group">
@@ -417,6 +431,7 @@
 
   <script src="i18n.js"></script>
   <script src="generation-batch.js"></script>
+  <script src="quality-controls.js"></script>
   <script src="prompt-presets.js"></script>
   <script src="viewer.js"></script>
   <script src="viewer-controller.js"></script>

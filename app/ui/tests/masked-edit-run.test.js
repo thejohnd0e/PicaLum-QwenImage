@@ -56,6 +56,7 @@ test("the request carries the exact source, mask, instruction, preset, seed and 
       maskPngBase64: "AAAA",
       instruction: "Make the saddle brown.",
       preset: "standard",
+      steps: null,
       seed: 777,
       featherPx: 8,
       featherMode: "bothSides",

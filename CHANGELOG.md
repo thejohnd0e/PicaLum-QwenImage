@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.25 — 2026-11-02
+
+- Compact the desktop quality controls with collapsible presets and editable generation steps and dimensions; validate custom values before generation and show source-derived photo dimensions.
+- Remove negative prompt from the desktop UI (CLI/core support remains); record an evidence-based follow-up investigation.
+
 ## 0.1.24 — 2026-11-02
 
 - Add CFG Scale slider and numeric input alongside denoising in the area editor (1.0–5.0, step 0.1). Initialize from the main window and use the dialog value for area generation and metadata without changing the main-window setting.

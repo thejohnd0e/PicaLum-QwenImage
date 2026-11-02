@@ -72,24 +72,23 @@
 
 **Interfaces:** `QilQualityControls.create({ getElement, invoke, translate, onChange })` returns `setContext({ mode, aspect, sourcePath }), selectPreset(name), snapshot(), setBusy(busy), render()`. `snapshot()` returns a copy of `{ preset, steps, width, height, custom, pixelBudget }`; photo width/height overrides are omitted, not submitted read-only values. Async resolution must ignore stale responses.
 
-- [ ] Write `quality-controls.test.js` against the actual controller and HTML. Test collapsed initial state; selected preset summary; preset fills controls; manual edit → Custom; selecting a preset clears Custom; only one selected radio or none in Custom; 256 per-axis boundary; empty/fractional/nonfinite/257 input blocks generation; width/height synchronization with 3:4; invalid companion <256 retains last valid pair and shows an error. Verify rounded ratio is labeled by actual dimensions, not claimed exact.
-- [ ] Add stale-response tests: rapidly choose Draft/Max and change Format; late responses cannot restore obsolete values. Add persistence tests for corrupt JSON, old preset-only storage and valid custom settings. Add mode tests for photo read-only dimensions and editable steps; no source yet shows unavailable dimensions rather than a fake value.
-- [ ] Run `node --test app/ui/tests/quality-controls.test.js`; verify expected failures before implementing.
-- [ ] Implement controller and native `<details id="qualityPresets">`/`<summary>` with localized `Quality presets` and compact current-value summary. Add visible labeled Steps/Width/Height below it, numeric controls with approved bounds, width/height step 32, local validation messages and a small warning below 1024. Persist one versioned quality-settings object and separate disclosure state. Corrupt saved state falls back to valid preset values.
-- [ ] Keep Format below as requested. Automatic aspect recalculation preserves area; rounding uses nearest 32, ties upward to match Rust's existing positive rounding. Manual dimension edits preserve the entered valid axis; invalid automatic companion reports an error. Preset dimensions come from core, including special Max sizes. Avoid re-querying core on every keystroke; validate committed numeric input and latest context changes.
-- [ ] Add English/Russian/Spanish strings for all labels, Custom, errors, low-resolution warning and photo/Random explanations. Use native labels, summary keyboard interaction, visible focus and no fixed-width translated text.
-- [ ] Run all Node tests and render at the screenshot's width plus a narrow desktop window/200% zoom, checking no horizontal overflow. Verify collapse/expand and fields using keyboard only. Commit controller/markup/styles/translations/tests.
+- [x] Write controller/HTML tests covering collapsed disclosure, presets, Custom state, valid/invalid boundaries, aspect recalculation, photo dimensions, random Surprise and storage/stale responses.
+- [x] Run the targeted test first; confirmed failure because the controller did not exist, then implement.
+- [x] Implement native disclosure, compact summary, labeled bounded inputs, validation and non-blocking sub-1024 detail warning; corrupt saved state falls back to a valid preset.
+- [x] Keep Format below; preserve area on ratio changes and query core for source-derived photo dimensions and special preset dimensions. Avoid core calls per keystroke.
+- [x] Add English/Russian/Spanish strings for controls, Custom, errors, warning and photo/Random explanations.
+- [ ] Actual interactive UI at narrow width/200% zoom and keyboard smoke remain unverified; no generation run.
+- [ ] Commit controller/markup/styles/translations/tests with the integrated UI commit.
 
 ## Task 4: Wire real generation, batches, Surprise and area editing
 
 **Interfaces:** app.js obtains the Task 3 snapshot once before the batch. Requests include optional `steps,width,height` accepted by Task 2; masked-edit requests include optional steps only under the recommended scope. Resolved return values are authoritative in history metadata.
 
-- [ ] Write integration tests: choose custom 17 steps and 512×512 → backend request exactly matches; invalid numeric input prevents invoke; subsequent UI edits do not alter a running batch snapshot; preset resets remove stale overrides; switching Create/Edit/Surprise does not leak width/height into photo requests. Verify result history records actual returned steps/dimensions, not a stale preset label.
-- [ ] Test Surprise fixed Format and Random separately. Random snapshots a pixel-area budget, then computes rounded dimensions from each `surprise_idea.aspect` after the idea arrives; two different idea aspects produce different dimensions at similar area. A manual dimension edit in Random is unavailable until a fixed Format is selected; Steps remains editable.
-- [ ] Test masked IPC payload/metadata carries custom steps, still omits negative, and produces a source-sized final composite. Legacy masked requests without steps retain preset defaults. Test busy/verification locks disable manual inputs and preset actions; re-enable after success, cancellation and failure.
-- [ ] Run the targeted Node tests and relevant Rust tests; observe expected failures.
-- [ ] Instantiate the controller before generation use; call `setContext` on mode, Format and reference changes. Replace old preset click wiring with controller calls. Update `generate()` validation/snapshot/nextRequest and `masked-edit-run.js` with the tested overrides. Use actual `r.steps` for history metadata. Keep seed, CFG and denoising snapshot behavior intact. No new CLI options are required; keep CLI default behavior unchanged.
-- [ ] Run `node --test app/ui/tests/*.test.js` and `cargo test --workspace`; commit integration and tests.
+- [x] Add coverage for the controller's custom/invalid state, fixed/random Surprise, photo request dimension omission, batch snapshots and masked-step wiring/history metadata.
+- [x] Instantiate and connect the controller; snapshot once per batch, call `setContext` on mode/Format/reference changes, and pass optional steps to masked edit. Use actual returned step/dimensions in history. Preserve seed/CFG/denoising behavior and CLI defaults.
+- [x] Run all Node tests (97 passed) and `cargo test --workspace` (155 passed, one ignored network test).
+- [ ] Interactive runtime IPC/UI smoke remains unverified; no GPU generation run.
+- [ ] Commit integration and tests with the UI/version changes.
 
 ## Task 5: Verify, increment once, build and hand off
 

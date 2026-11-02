@@ -208,6 +208,20 @@ input.mono { font-family: var(--font-mono); font-size: 12px; }
 .aspects button[aria-pressed="true"] { border-color: var(--text); color: var(--text); background: var(--sunken); }
 .ar-random { font-family: var(--font-sans) !important; font-size: 12px !important; }
 
+.quality-group details > summary { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; cursor: pointer; list-style: none; }
+.quality-group details > summary::-webkit-details-marker { display: none; }
+.quality-group details > summary::after { content: "＋"; color: var(--text-muted); font-size: 12px; }
+.quality-group details[open] > summary::after { content: "−"; }
+.quality-summary { color: var(--text-muted); font-size: 10px; }
+.quality-group .presets { margin-top: 8px; }
+.quality-manual { display: grid; gap: 6px; margin-top: 10px; }
+.quality-manual label { color: var(--text-muted); font-size: 11px; }
+.quality-manual input { width: 100%; min-height: 34px; }
+.quality-dimensions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.quality-dimensions > div { display: grid; gap: 5px; }
+.quality-custom { color: var(--accent, #d49a37); font-size: 11px; font-weight: 600; }
+.quality-error { color: var(--danger, #d55); font-size: 11px; }
+
 /* Referencias */
 .refs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
 .ref, .ref-add {

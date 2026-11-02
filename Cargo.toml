@@ -12,7 +12,7 @@ repository = "https://github.com/thejohnd0e/PicaLum-QwenImage"
 qil-core = { path = "crates/qil-core" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync", "fs"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync", "fs", "process"] }
 
 [profile.release]
 opt-level = 3

@@ -115,6 +115,18 @@ test("Space reveals the original while the Hold button keeps focus", () => {
   assert.equal(get("holdAfter").hidden, false);
 });
 
+test("erase results compare against their source", () => {
+  const { controller, get } = setup();
+  controller.select({
+    path: "erased.png",
+    meta: { mode: "erase", references: ["source.png"] },
+  });
+  assert.equal(get("viewerToolbar").hidden, false);
+  assert.equal(get("compareControls").hidden, false);
+  assert.equal(get("beforeShot").src, "source.png");
+  assert.equal(get("afterShot").src, "erased.png");
+});
+
 test("hold mode shows the original only during primary-pointer press and restores result on release or cancellation", () => {
   const { state, get } = setup();
   get("viewHold").dispatch("click");

@@ -10,7 +10,7 @@ use qil_core::{
     engine, generate, gpu, lama, prompt_presets, setup, surprise, verification, Config, Engine,
     EngineState, GenRequest, GenResult, Profile,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, RunEvent, State};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
@@ -408,6 +408,63 @@ async fn generate_masked_edit(
         .map_err(|error| qil_core::masked_run::error_text(error, &c))
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct EraseArgs {
+    source_path: String,
+    mask_png_base64: String,
+}
+
+/// LaMa erase shares the generation lock and cancel channel with Qwen runs.
+#[tauri::command]
+async fn erase_image(
+    settings: State<'_, Settings>,
+    args: EraseArgs,
+) -> Result<lama::EraseResult, String> {
+    if BUSY.swap(true, Ordering::SeqCst) {
+        return Err("A generation is already running.".into());
+    }
+    let _flag = Flag(&BUSY);
+    let mask_png = base64::engine::general_purpose::STANDARD
+        .decode(args.mask_png_base64.as_bytes())
+        .map_err(|error| format!("The mask is not valid base64: {error}"))?;
+    let (cancel_tx, cancel_rx) = tokio::sync::watch::channel(false);
+    *settings
+        .active_generation
+        .lock()
+        .map_err(|_| "Generation cancellation state is unavailable.".to_string())? =
+        Some(cancel_tx);
+    let _active = ActiveGenerationGuard(&settings);
+    let c = cfg(&settings);
+    if !engine::is_up(&c).await {
+        return Err("The engine is off. Start it before erasing.".into());
+    }
+    let control = qil_core::run_control::RunControl::new(
+        cancel_rx,
+        tokio::time::Instant::now() + Duration::from_secs(30 * 60),
+    );
+    lama::erase(
+        lama::EraseRequest {
+            source_path: PathBuf::from(args.source_path),
+            mask_png,
+        },
+        lama::EraseOptions {
+            config: &c,
+            control,
+        },
+    )
+    .await
+    .map_err(|error| match error {
+        qil_core::run_control::RunError::Cancelled => "Cancelled".into(),
+        qil_core::run_control::RunError::TimedOut => "The erase timed out.".into(),
+        qil_core::run_control::RunError::CancellationUnconfirmed => {
+            "Cancellation could not be confirmed.".into()
+        }
+        qil_core::run_control::RunError::TimeoutUnconfirmed => "The erase timed out.".into(),
+        qil_core::run_control::RunError::Request(message) => message,
+    })
+}
+
 #[tauri::command]
 async fn preview_mask_feather(
     mask_png_base64: String,
@@ -692,6 +749,7 @@ pub fn run() {
             generate,
             generation_settings_resolve,
             generate_masked_edit,
+            erase_image,
             preview_mask_feather,
             lama_status,
             lama_download,

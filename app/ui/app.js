@@ -60,6 +60,7 @@
   const maskUi = window.QilMaskEditorUi.create({
     getElement: $,
     invoke,
+    listen,
     translate: t,
     fileSrc,
     notify,
@@ -70,6 +71,7 @@
     getReferences: () => state.refs.slice(1).map((r) => ({ path: r.path, name: `${r.orig || r.path}`.split(/[\\/]/).pop() })),
     canRun: () => (state.busy || state.verification.state === "running" ? t("maskBusy") : state.engine !== "ready" ? t("maskEngineOff") : null),
     submit: (payload) => runMaskedEdit(payload),
+    submitErase: (payload) => runErase(payload),
     cancel: () => cancelGeneration(),
   });
 
@@ -647,6 +649,31 @@
     },
   });
   const runMaskedEdit = (payload) => maskedEditRun.run(payload);
+  const eraseRun = window.QilEraseRun.create({
+    invoke,
+    state,
+    translate: t,
+    hooks: {
+      begin() {
+        hideNotice();
+        updateGenButton();
+        renderEngine();
+        showWorking("load", 0, 0);
+      },
+      end() {
+        hideWorking();
+        updateGenButton();
+        renderHistory();
+        renderEngine();
+      },
+      applyResult(item) {
+        showImage(item);
+        renderHistory();
+      },
+      notify,
+    },
+  });
+  const runErase = (payload) => eraseRun.run(payload);
   $("maskEditBtn").addEventListener("click", () => maskUi.open());
   $("genBtn").addEventListener("click", () => generate());
   function cancelGeneration() {

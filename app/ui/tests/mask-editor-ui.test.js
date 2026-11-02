@@ -6,7 +6,14 @@ const test = require("node:test");
 
 // Use only IDs shipped in the actual page: absent controls must return null,
 // as in a browser, rather than being silently invented by a DOM test double.
-function setup({ cfg = 2.3, submit = async () => ({ ok: true }) } = {}) {
+function setup({
+  cfg = 2.3,
+  submit = async () => ({ ok: true }),
+  submitErase = async () => ({ ok: true }),
+  lamaStatus = { state: "ready" },
+  lamaDownload = async () => {},
+  listen,
+} = {}) {
   const html = fs.readFileSync(path.join(__dirname, "../index.html"), "utf8");
   const nodes = new Map();
   function element() {
@@ -29,6 +36,7 @@ function setup({ cfg = 2.3, submit = async () => ({ ok: true }) } = {}) {
       getContext() {
         return {
           save() {}, restore() {}, beginPath() {}, moveTo() {}, lineTo() {}, stroke() {},
+          clearRect() {},
           createImageData(w, h) { return { data: new Uint8ClampedArray(w * h * 4) }; },
           putImageData() {},
         };
@@ -58,8 +66,16 @@ function setup({ cfg = 2.3, submit = async () => ({ ok: true }) } = {}) {
   for (const file of ["mask-editor.js", "mask-preview.js", "mask-editor-ui.js"]) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, "..", file), "utf8"), context, { filename: file });
   }
+  const invoked = [];
   const editor = window.QilMaskEditorUi.create({
     getElement: (id) => nodes.get(id) || null,
+    invoke: async (command, args) => {
+      invoked.push([command, args]);
+      if (command === "lama_status") return lamaStatus;
+      if (command === "lama_download") return lamaDownload();
+      return null;
+    },
+    listen,
     translate: (key) => key,
     fileSrc: (p) => p,
     getSourcePath: () => "photo.jpg",
@@ -68,9 +84,10 @@ function setup({ cfg = 2.3, submit = async () => ({ ok: true }) } = {}) {
     getReferences: () => [],
     canRun: () => null,
     submit,
+    submitErase,
     notify() {},
   });
-  return { editor, nodes, images };
+  return { editor, nodes, images, invoked };
 }
 
 test("area editor opens with the shipped HTML, loads the photo, and closes", async () => {
@@ -130,6 +147,113 @@ test("invalid area CFG does not overwrite the valid slider and can be corrected"
   numeric.listeners.input();
   assert.equal(numeric.checkValidity(), true);
   assert.equal(range.value, "1.0");
+});
+
+test("a missing LaMa model shows Download instead of Erase and never downloads on open", async () => {
+  const { editor, nodes, invoked } = setup({ lamaStatus: { state: "missing" } });
+  await editor.open();
+
+  assert.equal(nodes.get("maskDownload").hidden, false);
+  assert.equal(nodes.get("maskErase").hidden, true);
+  assert.equal(nodes.get("maskDownload").textContent, "downloadLama");
+  assert.equal(invoked.some(([command]) => command === "lama_download"), false);
+  editor.handleKeydown({ key: "Escape", preventDefault() {}, target: nodes.get("maskDialog") });
+});
+
+test("a successful model download reveals Erase and reports progress", async () => {
+  const status = { state: "missing" };
+  let progress;
+  let finishDownload;
+  const { editor, nodes } = setup({
+    lamaStatus: status,
+    lamaDownload: () => new Promise((resolve) => {
+      finishDownload = () => {
+        status.state = "ready";
+        resolve();
+      };
+    }),
+    listen: async (name, callback) => {
+      assert.equal(name, "lama-download-progress");
+      progress = callback;
+      return () => {};
+    },
+  });
+  await editor.open();
+  const pending = nodes.get("maskDownload").listeners.click();
+  for (let i = 0; i < 10 && !finishDownload; i += 1) await Promise.resolve();
+  progress({ payload: { done: 100, total: 200 } });
+  assert.match(nodes.get("maskStatus").textContent, /50%/);
+  finishDownload();
+  await pending;
+
+  assert.equal(nodes.get("maskErase").hidden, false);
+  assert.equal(nodes.get("maskDownload").hidden, true);
+  assert.equal(nodes.get("maskStatus").textContent, "lamaReady");
+  editor.handleKeydown({ key: "Escape", preventDefault() {}, target: nodes.get("maskDialog") });
+});
+
+test("a failed model download keeps the Download button and shows the error", async () => {
+  const { editor, nodes } = setup({
+    lamaStatus: { state: "missing" },
+    lamaDownload: async () => {
+      throw "network down";
+    },
+  });
+  await editor.open();
+  await nodes.get("maskDownload").listeners.click();
+
+  assert.equal(nodes.get("maskDownload").hidden, false);
+  assert.equal(nodes.get("maskErase").hidden, true);
+  assert.equal(nodes.get("maskError").hidden, false);
+  assert.equal(nodes.get("maskError").textContent, "network down");
+  editor.handleKeydown({ key: "Escape", preventDefault() {}, target: nodes.get("maskDialog") });
+});
+
+test("Erase sends the source and mask, ignores an empty instruction, and closes on success", async () => {
+  let erased;
+  let generated = false;
+  const { editor, nodes, images } = setup({
+    submitErase: async (payload) => {
+      erased = payload;
+      return { ok: true };
+    },
+    submit: async () => {
+      generated = true;
+      return { ok: true };
+    },
+  });
+  await editor.open();
+  images[0].naturalWidth = 8;
+  images[0].naturalHeight = 8;
+  images[0].onload();
+  nodes.get("maskInstruction").value = "";
+  nodes.get("maskCanvas").listeners.pointerdown({ button: 0, pointerId: 1, clientX: 4, clientY: 4 });
+  await nodes.get("maskErase").listeners.click();
+
+  assert.equal(generated, false);
+  assert.equal(erased.sourcePath, "photo.jpg");
+  assert.equal(typeof erased.maskPngBase64, "string");
+  assert.ok(erased.maskPngBase64.length > 0);
+  assert.equal(editor.isOpen(), false);
+});
+
+test("Erase refuses an empty mask before calling the backend", async () => {
+  let calls = 0;
+  const { editor, nodes, images } = setup({
+    submitErase: async () => {
+      calls += 1;
+      return { ok: true };
+    },
+  });
+  await editor.open();
+  images[0].naturalWidth = 8;
+  images[0].naturalHeight = 8;
+  images[0].onload();
+  await nodes.get("maskErase").listeners.click();
+
+  assert.equal(calls, 0);
+  assert.equal(nodes.get("maskError").textContent, "maskEmpty");
+  editor.handleKeydown({ key: "Escape", preventDefault() {}, target: nodes.get("maskDialog") });
 });
 
 test("area generation sends the edited CFG and blocks an invalid numeric value", async () => {

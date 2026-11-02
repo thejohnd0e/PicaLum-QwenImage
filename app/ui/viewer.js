@@ -3,7 +3,7 @@
 
   function canCompare(item) {
     const refs = item?.meta?.references;
-    return ["photos", "masked-edit"].includes(item?.meta?.mode) && Array.isArray(refs) && typeof refs[0] === "string" && refs[0].length > 0;
+    return ["photos", "masked-edit", "erase"].includes(item?.meta?.mode) && Array.isArray(refs) && typeof refs[0] === "string" && refs[0].length > 0;
   }
 
   function fitScale(sourceWidth, sourceHeight, viewportWidth, viewportHeight) {

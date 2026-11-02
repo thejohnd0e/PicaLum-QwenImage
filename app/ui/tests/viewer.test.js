@@ -6,6 +6,8 @@ test("photo and masked edits require a valid first reference for comparison", ()
   assert.equal(canCompare({ meta: { mode: "photos", references: ["original.png"] } }), true);
   assert.equal(canCompare({ meta: { mode: "text", references: ["original.png"] } }), false);
   assert.equal(canCompare({ meta: { mode: "photos", references: [] } }), false);
+  assert.equal(canCompare({ meta: { mode: "erase", references: ["source.png"] } }), true);
+  assert.equal(canCompare({ meta: { mode: "erase", references: [] } }), false);
   assert.equal(canCompare({ meta: { mode: "masked-edit", references: [] } }), false);
   assert.equal(canCompare({ meta: { mode: "masked-edit", references: [null] } }), false);
   assert.equal(canCompare({ meta: { mode: "masked-edit", references: [""] } }), false);

@@ -40,6 +40,15 @@
     let opener = null;
     let observer = null;
     let autoText = ""; // instruction text we filled in for a chosen reference
+    let lamaStatus = null; // { state: "missing" | "ready" | "invalid" }
+    let lamaBusy = false;
+    let lamaUnlisten = null;
+
+    const fmtBytes = (bytes) => {
+      if (!bytes) return "0 MB";
+      const mb = bytes / 1048576;
+      return mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${Math.round(mb)} MB`;
+    };
 
     const maskPreview = window.QilMaskPreview.create({
       invoke: (args) => deps.invoke("preview_mask_feather", args),
@@ -342,7 +351,8 @@
     function renderControls() {
       const size = model.size;
       const open = Boolean(size);
-      const locked = generating || !open;
+      const ready = lamaStatus?.state === "ready";
+      const locked = generating || lamaBusy || !open;
       $("maskBrush").setAttribute("aria-pressed", String(model.tool === "brush"));
       $("maskEraser").setAttribute("aria-pressed", String(model.tool === "eraser"));
       $("maskSizeValue").textContent = `${model.brushSize} px`;
@@ -352,6 +362,11 @@
         $(id).disabled = locked;
       }
       $("maskGenerate").disabled = locked;
+      $("maskErase").hidden = !ready;
+      $("maskErase").disabled = locked || !ready;
+      $("maskDownload").hidden = !lamaStatus || ready;
+      $("maskDownload").disabled = locked || lamaBusy;
+      $("maskDownload").textContent = lamaBusy ? t("lamaDownloading") : t("downloadLama");
       $("maskClose").textContent = generating ? t("maskCancelRun") : t("maskClose");
       $("maskGenerate").textContent = generating ? t("generating") : t("maskGenerate");
       $("maskCanvas").setAttribute("aria-busy", String(generating));
@@ -435,6 +450,11 @@
       effectiveReady = false;
       image = null;
       generating = false;
+      lamaStatus = null;
+      lamaBusy = false;
+      lamaUnlisten?.();
+      lamaUnlisten = null;
+      setStatus("");
       hover = null;
       showError("");
       $("maskDiscard").hidden = true;
@@ -452,11 +472,18 @@
       renderReferences();
       $("maskLoading").hidden = false;
       model.close();
+      // A reopened dialog starts with an empty mask; drop any overlay from the
+      // previous photo so it cannot look like a pre-painted selection.
+      octx.clearRect(0, 0, overlay.width, overlay.height);
+      outlineCtx.clearRect(0, 0, rawOutline.width, rawOutline.height);
+      effectiveCtx.clearRect(0, 0, effectiveOverlay.width, effectiveOverlay.height);
+      effectiveReady = false;
       renderControls();
       observer ??= new ResizeObserver(resize);
       observer.observe($("maskStage"));
       resize();
       $("maskDialog").focus();
+      await refreshLama();
       const img = new Image();
       img.onload = () => {
         if (!isOpen() || sourcePath !== path) return;
@@ -491,6 +518,10 @@
       maskPreview.invalidate(null);
       if (previewTimer) clearTimeout(previewTimer);
       previewTimer = 0;
+      lamaUnlisten?.();
+      lamaUnlisten = null;
+      lamaBusy = false;
+      lamaStatus = null;
       effectiveReady = false;
       generating = false;
       $("maskBackdrop").hidden = true;
@@ -510,6 +541,104 @@
         return;
       }
       closeNow();
+    }
+
+    async function refreshLama() {
+      try {
+        const status = await deps.invoke("lama_status");
+        if (!isOpen()) return;
+        lamaStatus = status;
+      } catch (error) {
+        if (!isOpen()) return;
+        lamaStatus = { state: "invalid" };
+        showError(String(error));
+      }
+      renderControls();
+    }
+
+    async function downloadLama() {
+      if (lamaBusy || generating) return;
+      lamaBusy = true;
+      showError("");
+      setStatus(t("lamaDownloading"));
+      renderControls();
+      lamaUnlisten?.();
+      lamaUnlisten = null;
+      try {
+        if (deps.listen) {
+          lamaUnlisten = await deps.listen("lama-download-progress", (event) => {
+            if (!isOpen()) return;
+            const progress = event.payload || {};
+            const total = Number(progress.total) || 0;
+            const percent = total ? Math.floor((Number(progress.done) / total) * 100) : 0;
+            setStatus(
+              `${t("lamaDownloading")} ${percent}% · ${fmtBytes(progress.done)} / ${fmtBytes(total)}`,
+            );
+          });
+        }
+        await deps.invoke("lama_download");
+        const status = await deps.invoke("lama_status");
+        if (isOpen()) lamaStatus = status;
+        if (status?.state === "ready") {
+          setStatus(t("lamaReady"));
+        } else {
+          showError(t("lamaDownloadFailed"));
+        }
+      } catch (error) {
+        if (isOpen()) showError(String(error) || t("lamaDownloadFailed"));
+      } finally {
+        lamaUnlisten?.();
+        lamaUnlisten = null;
+        lamaBusy = false;
+        if (isOpen()) renderControls();
+      }
+    }
+
+    async function erase() {
+      if (generating || lamaBusy || !image) return;
+      showError("");
+      if (lamaStatus?.state !== "ready") {
+        showError(t("downloadLama"));
+        return;
+      }
+      if (model.isEmpty()) {
+        showError(t("maskEmpty"));
+        return;
+      }
+      const blocked = deps.canRun();
+      if (blocked) {
+        showError(blocked);
+        return;
+      }
+      let maskPngBase64;
+      try {
+        maskPngBase64 = toBase64(await model.getMaskPng());
+      } catch (error) {
+        showError(String(error.message || error));
+        return;
+      }
+      generating = true;
+      model.setBusy(true);
+      stroking = false;
+      $("maskDiscard").hidden = true;
+      setStatus(t("erasing"));
+      renderControls();
+      let outcome;
+      try {
+        outcome = await deps.submitErase({ sourcePath, maskPngBase64 });
+      } catch (error) {
+        outcome = { error: String(error) };
+      }
+      generating = false;
+      model.setBusy(false);
+      setStatus("");
+      if (!isOpen()) return;
+      if (outcome && outcome.ok) {
+        closeNow();
+        return;
+      }
+      if (outcome && outcome.error) showError(outcome.error);
+      renderControls();
     }
 
     async function generate() {
@@ -674,6 +803,8 @@
       $("maskClearBtn").addEventListener("click", () => { if (model.clear()) syncOverlay(); });
       $("maskFitBtn").addEventListener("click", fit);
       $("maskGenerate").addEventListener("click", generate);
+      $("maskErase").addEventListener("click", erase);
+      $("maskDownload").addEventListener("click", downloadLama);
       $("maskClose").addEventListener("click", requestClose);
       $("maskDiscardBtn").addEventListener("click", closeNow);
       $("maskKeep").addEventListener("click", () => { $("maskDiscard").hidden = true; $("maskBrush").focus(); });

@@ -109,7 +109,7 @@ pub fn edit_canvas_size(width: u32, height: u32, resolution: u32) -> (u32, u32) 
         let floor = units.floor();
         let fraction = units - floor;
         let rounded = if (fraction - 0.5).abs() < f64::EPSILON {
-            if (floor as u64) % 2 == 0 {
+            if (floor as u64).is_multiple_of(2) {
                 floor
             } else {
                 floor + 1.0

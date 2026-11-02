@@ -13,6 +13,7 @@ function setup({
   lamaStatus = { state: "ready" },
   lamaDownload = async () => {},
   listen,
+  canRun = () => null,
 } = {}) {
   const html = fs.readFileSync(path.join(__dirname, "../index.html"), "utf8");
   const nodes = new Map();
@@ -82,7 +83,7 @@ function setup({
     getPrompt: () => "Edit photo",
     getCfg: () => cfg,
     getReferences: () => [],
-    canRun: () => null,
+    canRun,
     submit,
     submitErase,
     notify() {},
@@ -253,6 +254,27 @@ test("Erase refuses an empty mask before calling the backend", async () => {
 
   assert.equal(calls, 0);
   assert.equal(nodes.get("maskError").textContent, "maskEmpty");
+  editor.handleKeydown({ key: "Escape", preventDefault() {}, target: nodes.get("maskDialog") });
+});
+
+test("Erase reports an unavailable engine before calling the backend", async () => {
+  let calls = 0;
+  const { editor, nodes, images } = setup({
+    canRun: () => "maskEngineOff",
+    submitErase: async () => {
+      calls += 1;
+      return { ok: true };
+    },
+  });
+  await editor.open();
+  images[0].naturalWidth = 8;
+  images[0].naturalHeight = 8;
+  images[0].onload();
+  nodes.get("maskCanvas").listeners.pointerdown({ button: 0, pointerId: 1, clientX: 4, clientY: 4 });
+  await nodes.get("maskErase").listeners.click();
+
+  assert.equal(calls, 0);
+  assert.equal(nodes.get("maskError").textContent, "maskEngineOff");
   editor.handleKeydown({ key: "Escape", preventDefault() {}, target: nodes.get("maskDialog") });
 });
 

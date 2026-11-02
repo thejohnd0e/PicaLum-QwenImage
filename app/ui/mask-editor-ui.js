@@ -582,10 +582,14 @@
         if (status?.state === "ready") {
           setStatus(t("lamaReady"));
         } else {
+          setStatus("");
           showError(t("lamaDownloadFailed"));
         }
       } catch (error) {
-        if (isOpen()) showError(String(error) || t("lamaDownloadFailed"));
+        if (isOpen()) {
+          setStatus("");
+          showError(String(error) || t("lamaDownloadFailed"));
+        }
       } finally {
         lamaUnlisten?.();
         lamaUnlisten = null;

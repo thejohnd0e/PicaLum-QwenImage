@@ -732,11 +732,12 @@
     if (m.width) parts.push(`${m.width}×${m.height}`);
     if (m.seed != null) parts.push(`seed ${m.seed}`);
     if (m.preset) parts.push(t(PRESET_KEY[m.preset] || m.preset));
+    if (m.model) parts.push(m.model);
     if (m.seconds) parts.push(fmtSecs(Math.round(m.seconds)));
     if (m.mode === "photos" && m.references?.length) parts.push(`${m.references.length} ${t("refs")}`);
     $("infoMeta").textContent = parts.join(" · ");
     $("aSeed").disabled = m.seed == null;
-    $("aCopy").disabled = !m.prompt;
+    $("aCopy").disabled = !m.prompt || m.mode === "erase";
     document.querySelectorAll(".hist").forEach((h) => h.setAttribute("aria-current", String(h.dataset.path === item.path)));
   }
   function renderHistory() {

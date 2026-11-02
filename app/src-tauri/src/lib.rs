@@ -7,7 +7,7 @@ use base64::Engine as _;
 use qil_core::masked_edit::{effective_mask, MaskFeatherMode, MaskedEditOptions};
 use qil_core::prompt_presets::PromptPresetFile;
 use qil_core::{
-    engine, generate, gpu, prompt_presets, setup, surprise, verification, Config, Engine,
+    engine, generate, gpu, lama, prompt_presets, setup, surprise, verification, Config, Engine,
     EngineState, GenRequest, GenResult, Profile,
 };
 use serde::Serialize;
@@ -449,6 +449,41 @@ async fn preview_mask_feather(
     Ok(base64::engine::general_purpose::STANDARD.encode(png))
 }
 
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LamaProgress {
+    done: u64,
+    total: u64,
+    bytes_per_sec: f64,
+}
+
+#[tauri::command]
+async fn lama_status(settings: State<'_, Settings>) -> Result<lama::LamaStatus, String> {
+    let c = cfg(&settings);
+    tauri::async_runtime::spawn_blocking(move || lama::status(&c))
+        .await
+        .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+async fn lama_download(app: AppHandle, settings: State<'_, Settings>) -> Result<(), String> {
+    let c = cfg(&settings);
+    tauri::async_runtime::spawn_blocking(move || {
+        lama::install(&c, &mut |progress| {
+            let _ = app.emit(
+                "lama-download-progress",
+                LamaProgress {
+                    done: progress.done,
+                    total: progress.total,
+                    bytes_per_sec: progress.bytes_per_sec,
+                },
+            );
+        })
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
 #[tauri::command]
 async fn cancel(settings: State<'_, Settings>) -> Result<(), String> {
     let active = settings
@@ -658,6 +693,8 @@ pub fn run() {
             generation_settings_resolve,
             generate_masked_edit,
             preview_mask_feather,
+            lama_status,
+            lama_download,
             cancel,
             gpu_verification_start,
             gpu_verification_cancel,

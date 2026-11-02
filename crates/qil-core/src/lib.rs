@@ -10,6 +10,7 @@ pub mod engine;
 pub mod generate;
 pub mod gpu;
 pub mod gpu_profile;
+pub mod lama;
 pub mod masked_edit;
 pub mod masked_run;
 mod png_metadata;

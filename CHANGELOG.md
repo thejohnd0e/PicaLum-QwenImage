@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.30 — 2026-11-02
+
+- Add LaMa object erase to the mask editor: paint an area, then Erase without an instruction.
+- Show a Download model button with progress and retry when LaMa is missing; the verified model is stored locally.
+- Erase results keep the source untouched, appear in history, and compare against the original after restart. Qwen edits are unchanged.
+
 ## 0.1.29 — 2026-11-02
 
 - Make the Hold comparison button press-and-hold, so it reveals the original while pressed instead of only selecting the mode.

@@ -1,3 +1,7 @@
+use std::fs::File;
+use std::io::{Read, Seek, SeekFrom};
+use std::path::Path;
+
 use crc32fast::Hasher;
 
 const PNG_SIGNATURE: &[u8; 8] = b"\x89PNG\r\n\x1a\n";
@@ -73,6 +77,117 @@ pub(crate) fn embed_generation_metadata(
         return Err("PNG is missing IEND".into());
     }
     Ok(output)
+}
+
+pub(crate) fn embed_text_chunk(png: &[u8], keyword: &str, text: &str) -> Result<Vec<u8>, String> {
+    if !png.starts_with(PNG_SIGNATURE) {
+        return Err("invalid PNG signature".into());
+    }
+    let chunk = itxt_chunk(keyword, text)?;
+    let mut output = Vec::with_capacity(png.len() + chunk.len());
+    output.extend_from_slice(PNG_SIGNATURE);
+    let mut offset = PNG_SIGNATURE.len();
+    let mut found_iend = false;
+    while offset < png.len() {
+        let length = u32::from_be_bytes(
+            png.get(offset..offset + 4)
+                .ok_or_else(|| "truncated PNG chunk length".to_string())?
+                .try_into()
+                .expect("four bytes"),
+        ) as usize;
+        let chunk_end = offset
+            .checked_add(12)
+            .and_then(|end| end.checked_add(length))
+            .filter(|&end| end <= png.len())
+            .ok_or_else(|| "truncated PNG chunk".to_string())?;
+        if &png[offset + 4..offset + 8] == b"IEND" {
+            if length != 0 || chunk_end != png.len() {
+                return Err("invalid PNG IEND chunk".into());
+            }
+            output.extend_from_slice(&chunk);
+            output.extend_from_slice(&png[offset..chunk_end]);
+            found_iend = true;
+            break;
+        }
+        output.extend_from_slice(&png[offset..chunk_end]);
+        offset = chunk_end;
+    }
+    if !found_iend {
+        return Err("PNG is missing IEND".into());
+    }
+    Ok(output)
+}
+
+/// Reads an uncompressed iTXt chunk by keyword without loading the whole PNG.
+pub(crate) fn read_text_chunk(path: &Path, keyword: &str) -> Result<Option<String>, String> {
+    let mut file = File::open(path).map_err(|error| error.to_string())?;
+    let mut signature = [0u8; 8];
+    file.read_exact(&mut signature)
+        .map_err(|error| error.to_string())?;
+    if &signature != PNG_SIGNATURE {
+        return Err("invalid PNG signature".into());
+    }
+    loop {
+        let mut length_bytes = [0u8; 4];
+        if let Err(error) = file.read_exact(&mut length_bytes) {
+            if error.kind() == std::io::ErrorKind::UnexpectedEof {
+                return Ok(None);
+            }
+            return Err(error.to_string());
+        }
+        let length = u32::from_be_bytes(length_bytes) as usize;
+        let mut kind = [0u8; 4];
+        file.read_exact(&mut kind)
+            .map_err(|error| error.to_string())?;
+        if &kind == b"IEND" {
+            return Ok(None);
+        }
+        if &kind == b"iTXt" {
+            let mut data = vec![0u8; length];
+            file.read_exact(&mut data)
+                .map_err(|error| error.to_string())?;
+            let mut crc = [0u8; 4];
+            file.read_exact(&mut crc)
+                .map_err(|error| error.to_string())?;
+            if let Some((key, text)) = parse_itxt(&data)? {
+                if key == keyword {
+                    return Ok(Some(text));
+                }
+            }
+        } else {
+            file.seek(SeekFrom::Current((length + 4) as i64))
+                .map_err(|error| error.to_string())?;
+        }
+    }
+}
+
+fn parse_itxt(data: &[u8]) -> Result<Option<(String, String)>, String> {
+    let key_end = data
+        .iter()
+        .position(|&byte| byte == 0)
+        .ok_or_else(|| "iTXt keyword is not terminated".to_string())?;
+    let key = std::str::from_utf8(&data[..key_end]).map_err(|error| error.to_string())?;
+    let mut offset = key_end + 1;
+    if data.len() < offset + 2 {
+        return Err("iTXt header is truncated".into());
+    }
+    let compressed = data[offset];
+    offset += 2;
+    let language_end = data[offset..]
+        .iter()
+        .position(|&byte| byte == 0)
+        .ok_or_else(|| "iTXt language tag is not terminated".to_string())?;
+    offset += language_end + 1;
+    let translated_end = data[offset..]
+        .iter()
+        .position(|&byte| byte == 0)
+        .ok_or_else(|| "iTXt translated keyword is not terminated".to_string())?;
+    offset += translated_end + 1;
+    if compressed != 0 {
+        return Ok(None);
+    }
+    let text = std::str::from_utf8(&data[offset..]).map_err(|error| error.to_string())?;
+    Ok(Some((key.to_string(), text.to_string())))
 }
 
 fn itxt_chunk(keyword: &str, text: &str) -> Result<Vec<u8>, String> {
@@ -197,6 +312,29 @@ mod tests {
         assert_eq!(payloads[1].0, "XML:com.adobe.xmp");
         assert!(payloads[1].1.contains("кот &amp; &lt;луна&gt;"));
         assert!(payloads[1].1.contains("PicaLum QwenImage"));
+    }
+
+    #[test]
+    fn text_chunk_round_trips_without_changing_other_chunks() {
+        let original = fixture();
+        let embedded = embed_text_chunk(&original, "picalum-erase", r#"{"mode":"erase"}"#).unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("image.png");
+        std::fs::write(&path, &embedded).unwrap();
+
+        assert_eq!(
+            read_text_chunk(&path, "picalum-erase").unwrap().as_deref(),
+            Some(r#"{"mode":"erase"}"#)
+        );
+        assert!(read_text_chunk(&path, "missing").unwrap().is_none());
+        let old_chunks = chunks(&original);
+        let new_chunks = chunks(&embedded);
+        assert_eq!(new_chunks.len(), old_chunks.len() + 1);
+        assert_eq!(old_chunks[0], new_chunks[0]);
+        assert_eq!(old_chunks[1], new_chunks[1]);
+        assert_eq!(old_chunks[2], new_chunks[3]);
+        assert_eq!(new_chunks[2].1, b"iTXt");
+        assert_eq!(new_chunks[3].1, b"IEND");
     }
 
     #[test]

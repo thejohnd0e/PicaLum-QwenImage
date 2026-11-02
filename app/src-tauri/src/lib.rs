@@ -673,7 +673,8 @@ fn list_outputs(settings: State<'_, Settings>, limit: Option<usize>) -> Vec<Outp
         .map(|(_, p)| OutputItem {
             meta: std::fs::read(p.with_extension("json"))
                 .ok()
-                .and_then(|b| serde_json::from_slice(&b).ok()),
+                .and_then(|b| serde_json::from_slice(&b).ok())
+                .or_else(|| qil_core::lama::read_metadata(&p)),
             path: p.to_string_lossy().into_owned(),
         })
         .collect()

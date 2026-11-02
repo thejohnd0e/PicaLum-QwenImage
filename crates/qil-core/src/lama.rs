@@ -222,6 +222,15 @@ fn worker_tail(bytes: &[u8]) -> String {
         .join(" · ")
 }
 
+fn worker_command(program: &Path) -> tokio::process::Command {
+    let mut command = tokio::process::Command::new(program);
+    #[cfg(windows)]
+    command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    command.stdout(std::process::Stdio::piped());
+    command.stderr(std::process::Stdio::piped());
+    command
+}
+
 /// Runs LaMa in the app's Python environment and publishes an atomic PNG.
 pub async fn erase(req: EraseRequest, options: EraseOptions<'_>) -> Result<EraseResult, RunError> {
     let cfg = options.config;
@@ -253,7 +262,7 @@ pub async fn erase(req: EraseRequest, options: EraseOptions<'_>) -> Result<Erase
     let model = model_path(cfg);
     let source = req.source_path;
 
-    let mut command = tokio::process::Command::new(cfg.python());
+    let mut command = worker_command(&cfg.python());
     command
         .arg(&worker)
         .arg(&model)
@@ -296,6 +305,7 @@ pub async fn erase(req: EraseRequest, options: EraseOptions<'_>) -> Result<Erase
         width,
         height,
         seconds,
+        cfg.save_json,
     )
     .map_err(RunError::Request)?;
     Ok(EraseResult {
@@ -313,6 +323,7 @@ fn publish_output(
     width: u32,
     height: u32,
     seconds: f64,
+    save_json: bool,
 ) -> Result<PathBuf, String> {
     std::fs::create_dir_all(output_dir).map_err(|error| error.to_string())?;
     let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
@@ -323,17 +334,6 @@ fn publish_output(
         .map(|name| name.to_string_lossy().into_owned())
         .unwrap_or_else(|| "erase.png".into());
     let part = dest.with_file_name(format!(".{name}.{:08x}.part", rand::random::<u32>()));
-    if let Err(error) = std::fs::copy(generated, &part) {
-        let _ = std::fs::remove_file(&part);
-        return Err(error.to_string());
-    }
-    if let Err(error) = std::fs::rename(&part, &dest) {
-        let _ = std::fs::remove_file(&part);
-        return Err(format!("Could not publish the erased image: {error}"));
-    }
-    // Comparison metadata is part of the erase result, not an optional extra:
-    // without it a restart cannot recognize the source. If it cannot be written,
-    // remove the image rather than publish a result that loses its comparison.
     let round1 = |x: f64| (x * 10.0).round() / 10.0;
     let meta = serde_json::json!({
         "prompt": "Erase",
@@ -346,20 +346,53 @@ fn publish_output(
         "app": concat!("PicaLum QwenImage ", env!("CARGO_PKG_VERSION")),
         "created": chrono::Local::now().to_rfc3339(),
     });
-    let sidecar = dest.with_extension("json");
-    let bytes = serde_json::to_vec_pretty(&meta).map_err(|error| error.to_string())?;
-    if let Err(error) = std::fs::write(&sidecar, bytes) {
-        let _ = std::fs::remove_file(&dest);
-        let _ = std::fs::remove_file(&sidecar);
-        return Err(format!("Could not write the erase metadata: {error}"));
+    let meta_json = serde_json::to_string(&meta).map_err(|error| error.to_string())?;
+    let png = crate::png_metadata::embed_text_chunk(
+        &std::fs::read(generated).map_err(|error| error.to_string())?,
+        "picalum-erase",
+        &meta_json,
+    )?;
+    if let Err(error) = std::fs::write(&part, png) {
+        let _ = std::fs::remove_file(&part);
+        return Err(error.to_string());
+    }
+    if let Err(error) = std::fs::rename(&part, &dest) {
+        let _ = std::fs::remove_file(&part);
+        return Err(format!("Could not publish the erased image: {error}"));
+    }
+    // JSON is optional, matching the Output settings checkbox. The same
+    // metadata is always embedded in the PNG so a restart can still compare.
+    if save_json {
+        let _ = std::fs::write(
+            dest.with_extension("json"),
+            serde_json::to_vec_pretty(&meta).unwrap_or_default(),
+        );
     }
     Ok(dest)
+}
+
+/// Reads the erase metadata embedded in a published PNG.
+pub fn read_metadata(path: &Path) -> Option<serde_json::Value> {
+    crate::png_metadata::read_text_chunk(path, "picalum-erase")
+        .ok()
+        .flatten()
+        .and_then(|text| serde_json::from_str(&text).ok())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::io::Write;
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn worker_process_has_no_console_and_captures_errors() {
+        let mut command = worker_command(std::path::Path::new("powershell.exe"));
+        let output = command.args(["-NoProfile", "-Command", "Add-Type '[System.Runtime.InteropServices.DllImport(\"kernel32.dll\")] public static extern System.IntPtr GetConsoleWindow();' -Name Native -Namespace Test; [Console]::Out.Write([Test.Native]::GetConsoleWindow().ToInt64()); [Console]::Error.Write('diagnostic')"]).output().await.unwrap();
+        assert!(output.status.success());
+        assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "0");
+        assert_eq!(String::from_utf8_lossy(&output.stderr), "diagnostic");
+    }
 
     fn sha(bytes: &[u8]) -> String {
         use sha2::{Digest, Sha256};
@@ -490,6 +523,7 @@ mod tests {
             runtime_dir: crate::config::default_runtime_dir(),
             models_dir: dir.path().join("models"),
             output_dir: dir.path().join("out"),
+            save_json: false,
             ..Config::default()
         };
         std::fs::create_dir_all(cfg.models_dir.join("lama")).unwrap();
@@ -511,6 +545,7 @@ mod tests {
         }
         let mask_path = dir.path().join("mask.png");
         mask.save(&mask_path).unwrap();
+        let source_string = source.to_string_lossy().into_owned();
 
         let (_cancel, cancel_rx) = tokio::sync::watch::channel(false);
         let result = erase(
@@ -534,6 +569,11 @@ mod tests {
         assert_eq!(output.get_pixel(0, 0), image.get_pixel(0, 0));
         assert_ne!(output.get_pixel(32, 32), image.get_pixel(32, 32));
         assert!(result.path.ends_with("_erase.png"));
+        let published = Path::new(&result.path);
+        assert!(!published.with_extension("json").exists());
+        let meta = read_metadata(published).expect("embedded erase metadata");
+        assert_eq!(meta["mode"], "erase");
+        assert_eq!(meta["references"][0], source_string);
     }
 
     #[test]
@@ -546,8 +586,8 @@ mod tests {
         let generated = dir.path().join("generated.png");
         png.save(&generated).unwrap();
 
-        let first = publish_output(&generated, &out, &source, 3, 2, 1.25).unwrap();
-        let second = publish_output(&generated, &out, &source, 3, 2, 1.25).unwrap();
+        let first = publish_output(&generated, &out, &source, 3, 2, 1.25, true).unwrap();
+        let second = publish_output(&generated, &out, &source, 3, 2, 1.25, true).unwrap();
         assert_ne!(first, second);
         assert!(first.exists() && second.exists());
         assert!(first.to_string_lossy().ends_with("_erase.png"));
@@ -560,5 +600,26 @@ mod tests {
         assert_eq!(meta["height"], 2);
         assert_eq!(meta["references"][0], source.to_string_lossy().as_ref());
         assert!(meta.get("seed").is_none());
+    }
+
+    #[test]
+    fn erase_without_json_embeds_metadata_and_writes_no_sidecar() {
+        let dir = tempfile::tempdir().unwrap();
+        let out = dir.path().join("out");
+        let source = dir.path().join("source.png");
+        let png = image::RgbImage::from_pixel(3, 2, image::Rgb([10, 20, 30]));
+        png.save(&source).unwrap();
+        let generated = dir.path().join("generated.png");
+        png.save(&generated).unwrap();
+
+        let published = publish_output(&generated, &out, &source, 3, 2, 1.25, false).unwrap();
+        assert!(!published.with_extension("json").exists());
+
+        let meta = read_metadata(&published).expect("embedded erase metadata");
+        assert_eq!(meta["mode"], "erase");
+        assert_eq!(meta["model"], "LaMa");
+        assert_eq!(meta["references"][0], source.to_string_lossy().as_ref());
+        assert_eq!(meta["width"], 3);
+        assert_eq!(meta["height"], 2);
     }
 }

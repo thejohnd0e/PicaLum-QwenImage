@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.32 — 2026-11-02
+
+- Respect the "Create JSON metadata files" checkbox for Erase: metadata is embedded in the PNG and a JSON sidecar is written only when the option is enabled.
+
+## 0.1.31 — 2026-11-02
+
+- Run the LaMa erase worker without opening a console window on Windows.
+
 ## 0.1.30 — 2026-11-02
 
 - Add LaMa object erase to the mask editor: paint an area, then Erase without an instruction.

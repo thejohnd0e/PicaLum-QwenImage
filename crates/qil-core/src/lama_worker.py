@@ -61,6 +61,9 @@ def main():
 
     result = result[0, :, :height, :width].clamp(0, 1).mul(255).round()
     result = result.to(torch.uint8).permute(1, 2, 0).cpu().numpy()
+    # Erase must not touch anything outside the painted area.
+    original = np.asarray(mask) == 0
+    result[original] = np.asarray(source)[original]
     Image.fromarray(result, "RGB").save(output_path)
     print(json.dumps({"width": width, "height": height}))
 

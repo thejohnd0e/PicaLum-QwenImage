@@ -6,7 +6,6 @@
 
 Your photos and prompts stay on your computer. No cloud image service or subscription is needed.
 
-[![Status](https://img.shields.io/badge/status-beta-d29922?style=flat-square)](CHANGELOG.md)
 [![Windows](https://img.shields.io/badge/windows-10%20%7C%2011-0078D4?style=flat-square&logo=windows&logoColor=white)](#what-you-need)
 [![Tested GPU](https://img.shields.io/badge/tested%20GPU-RTX%203060%2012%20GB-76B900?style=flat-square&logo=nvidia&logoColor=white)](#what-you-need)
 [![Model](https://img.shields.io/badge/model-Qwen--Image--2.1-615CED?style=flat-square)](https://huggingface.co/Qwen/Qwen-Image-2.1)

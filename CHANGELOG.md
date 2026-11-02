@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.34 — 2026-11-02
+
+- Remove the beta status badge from the README.
+- Refresh the Create screenshot and document Erase, manual quality controls, comparison modes, persisted history and optional JSON metadata.
+- Fix a Clippy warning in edit canvas rounding.
+
 ## 0.1.33 — 2026-11-02
 
 - Remove the desktop Surprise mode. The `qil surprise` CLI command remains available.

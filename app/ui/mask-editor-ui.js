@@ -484,6 +484,7 @@
       resize();
       $("maskDialog").focus();
       await refreshLama();
+      if (!isOpen()) return;
       const img = new Image();
       img.onload = () => {
         if (!isOpen() || sourcePath !== path) return;

@@ -42,6 +42,7 @@
     stepState: {}, // id -> {state, detail, done, total, bps}
     verification: { state: "idle", progress: 0, key: "", canceling: false },
   };
+  let showingRefPreview = false;
   const comparison = window.QilComparison.create({ state, getElement: $, fileSrc, translate: t });
   const promptPresets = window.QilPromptPresets.create({
     invoke,
@@ -345,6 +346,7 @@
       try { ref.thumb = await invoke("thumbnail", { path, size: 240 }); } catch (e) { notify(String(e)); }
       renderRefs();
     }
+    if (fresh.length) showRefPreview();
     quality.setContext({ mode: state.mode, aspect: state.mode === "surprise" ? state.surpriseAspect : state.aspect, sourcePath: state.refs[0]?.path || null });
     updateGenButton();
   }
@@ -357,8 +359,10 @@
       ref.orig ??= ref.path;
       ref.path = path;
       ref.thumb = thumb;
+      ref.preview = null;
     } catch (e) { notify(String(e)); }
     renderRefs();
+    if (showingRefPreview) showRefPreview();
   }
   function renderRefs() {
     const box = $("refs");
@@ -369,7 +373,12 @@
       el.className = "ref" + (i === 0 ? " canvas" : "");
       el.title = (i === 0 ? t("canvas") + " · " : "") + r.path;
       el.innerHTML = `${r.thumb ? `<img src="${r.thumb}" alt="">` : ""}<span class="n">${i + 1}</span><button type="button" class="rot" aria-label="${t("rotate")}" title="${t("rotate")}">↻</button><button type="button" class="x" aria-label="${t("remove")}">×</button>`;
-      el.querySelector(".x").addEventListener("click", () => { state.refs.splice(i, 1); renderRefs(); updateGenButton(); });
+      el.querySelector(".x").addEventListener("click", () => {
+        state.refs.splice(i, 1);
+        renderRefs();
+        if (showingRefPreview) showRefPreview();
+        updateGenButton();
+      });
       el.querySelector(".rot").addEventListener("click", (e) => rotateRef(r, e.currentTarget));
       box.appendChild(el);
     });
@@ -681,6 +690,7 @@
 
   // Viewer and history
   function showImage(item) {
+    showingRefPreview = false;
     state.current = item;
     const img = $("shot");
     img.src = fileSrc(item.path);
@@ -720,7 +730,37 @@
     $("histCount").textContent = String(state.history.length);
     $("clearHistoryBtn").disabled = state.busy || state.history.length === 0;
   }
+  // The stage shows the canvas while the user prepares an edit, so a newly
+  // added photo is visible instead of the previous generation.
+  async function showRefPreview() {
+    const ref = state.mode === "photos" ? state.refs[0] : null;
+    if (!ref) {
+      if (showingRefPreview) clearCurrentPreview();
+      return;
+    }
+    showingRefPreview = true;
+    state.current = null;
+    comparison.reset();
+    $("info").hidden = true;
+    $("empty").hidden = true;
+    document.querySelectorAll(".hist").forEach((h) => h.setAttribute("aria-current", "false"));
+    const img = $("shot");
+    img.hidden = false;
+    if (ref.preview || ref.thumb) img.src = ref.preview || ref.thumb;
+    else img.removeAttribute("src");
+    if (ref.preview) return;
+    const path = ref.path;
+    try {
+      const preview = await invoke("thumbnail", { path, size: 1400 });
+      if (showingRefPreview && state.refs[0]?.path === path) {
+        ref.preview = preview;
+        img.src = preview;
+      }
+    } catch { /* keep the small thumbnail */ }
+  }
+
   function clearCurrentPreview() {
+    showingRefPreview = false;
     state.current = null;
     comparison.reset();
     $("shot").hidden = true;

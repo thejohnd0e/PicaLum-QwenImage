@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.28 — 2026-11-02
+
+- Restore comparison controls for masked-edit results, comparing the composite against its source photo.
+- Keep feather-preview status over the canvas so preview updates no longer resize the drawing area or change image scale.
+
 ## 0.1.27 — 2026-11-02
 
 - Group CFG Scale and Seed in one framed row with a divider, and remove the CFG hint to keep the panel calm.

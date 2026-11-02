@@ -1,0 +1,43 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Mask editor layout regression</title>
+<link rel="stylesheet" href="../styles.css">
+<script src="../mask-editor.js"></script>
+<script src="../mask-preview.js"></script>
+<script src="../mask-editor-ui.js"></script>
+<script>
+// Serve the repository root and open this page at 1200x800 (also test 900x650).
+// Uses the shipped markup, styles, and editor, without Tauri or GPU calls.
+window.testResult = (async () => {
+  const html = await (await fetch("../index.html")).text();
+  const page = new DOMParser().parseFromString(html, "text/html");
+  document.body.appendChild(page.getElementById("maskBackdrop"));
+  for (const el of document.querySelectorAll("[data-i18n]")) el.textContent = el.dataset.i18n;
+  const $ = (id) => document.getElementById(id);
+  const source = document.createElement("canvas");
+  source.width = 1200; source.height = 900;
+  const editor = QilMaskEditorUi.create({
+    getElement: $, translate: (key) => key, fileSrc: () => source.toDataURL(),
+    getSourcePath: () => "source.png", getPrompt: () => "edit", getReferences: () => [],
+    canRun: () => null, notify() {}, invoke: async () => { throw Error("No backend in layout test"); },
+  });
+  const settle = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  await editor.open();
+  while (!$('maskLoading').hidden) await settle();
+  await settle();
+  const geometry = () => {
+    const rect = $("maskCanvas").getBoundingClientRect();
+    return [rect.x, rect.y, rect.width, rect.height, $("maskCanvas").width, $("maskCanvas").height];
+  };
+  const idle = geometry();
+  const samples = [];
+  for (const status of ["maskPreviewBusy", "", "maskPreviewFailed", ""]) {
+    $("maskPreviewStatus").hidden = !status;
+    $("maskPreviewStatus").textContent = status;
+    await settle();
+    samples.push(geometry());
+  }
+  const passed = samples.every((sample) => JSON.stringify(sample) === JSON.stringify(idle));
+  return { passed, idle, samples };
+})().then((result) => { document.title = result.passed ? "PASS: stable mask canvas" : "FAIL: mask canvas moved"; return result; });
+</script>

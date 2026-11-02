@@ -64,6 +64,28 @@ function setup() {
   return { controller, state, get, item, window };
 }
 
+test("masked edit results expose comparison modes against the source, not the content reference", async () => {
+  const { controller, state, get } = setup();
+  const run = require("../masked-edit-run.js").create({
+    state: { busy: false, generationRun: 0, preset: "standard", sessionOutputs: new Set(), history: [] },
+    invoke: async () => ({ path: "masked.png", width: 1200, height: 900, seed: 1, steps: 30 }),
+    translate: (key) => key, lockedSeed: () => 1, getCfg: () => 1,
+    hooks: { begin() {}, end() {}, applyResult: (item) => controller.select(item), notify() {} },
+  });
+  await run.run({ sourcePath: "source.png", references: ["content.png"], instruction: "edit", maskPngBase64: "mask", featherPx: 8 });
+  assert.equal(get("viewerToolbar").hidden, false);
+  assert.equal(get("compareControls").hidden, false);
+  assert.equal(get("beforeShot").src, "source.png");
+  assert.equal(get("afterShot").src, "masked.png");
+  for (const [button, mode] of [["viewSideBySide", "sideBySide"], ["viewWipe", "wipe"], ["viewHold", "hold"]]) {
+    get(button).dispatch("click");
+    assert.equal(state.compareMode, mode);
+    assert.equal(get("compareView").hidden, false);
+  }
+  controller.reset();
+  assert.equal(get("viewerToolbar").hidden, true);
+});
+
 test("hold mode shows the original only during primary-pointer press and restores result on release or cancellation", () => {
   const { state, get } = setup();
   get("viewHold").dispatch("click");

@@ -539,7 +539,8 @@ input.mono { font-family: var(--font-mono); font-size: 12px; }
 .mask-feather-number { width: 58px; min-height: 28px; padding: 3px 5px; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--sunken); color: var(--text); font: 12px var(--font-mono); }
 .mask-range select { max-width: 170px; min-height: 28px; padding: 3px 6px; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--sunken); color: var(--text); }
 .mask-gaussian-warning { color: var(--warning); }
-.mask-preview-status { min-height: 1em; }
+/* Preview updates must not resize the stage and change the source-to-brush map. */
+.mask-preview-status { position: absolute; left: 8px; bottom: 8px; max-width: calc(100% - 16px); padding: 3px 6px; border-radius: var(--r); background: var(--panel); pointer-events: none; }
 .mask-range .mono { min-width: 42px; }
 .mask-stage { position: relative; flex: 1 1 auto; min-height: 220px; height: min(56vh, 620px); border: 1px solid var(--border); border-radius: var(--r); background: var(--sunken); overflow: hidden; }
 .mask-stage canvas { display: block; cursor: crosshair; touch-action: none; }

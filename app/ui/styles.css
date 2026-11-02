@@ -333,6 +333,7 @@ input.mono { font-family: var(--font-mono); font-size: 12px; }
 .hold-stage { position: relative; flex: 1; min-height: 0; overflow: hidden; border: 1px solid var(--border); border-radius: 7px; background: repeating-conic-gradient(var(--check-a) 0 25%, var(--check-b) 0 50%) 0 0 / 16px 16px; touch-action: none; user-select: none; }
 .hold-stage img { position: absolute; left: 0; top: 0; max-width: none; max-height: none; transform-origin: 0 0; object-fit: fill; pointer-events: none; user-select: none; -webkit-user-drag: none; }
 .hold-stage .compare-label { pointer-events: none; }
+.hold-hint { position: absolute; left: 50%; bottom: 10px; z-index: 1; max-width: calc(100% - 24px); padding: 4px 8px; transform: translateX(-50%); border: 1px solid var(--border); border-radius: 5px; background: color-mix(in srgb, var(--panel) 92%, transparent); color: var(--text-muted); font-size: 10.5px; text-align: center; pointer-events: none; }
 .wipe-layer { position: absolute; inset: 0; overflow: hidden; }
 .wipe-before { clip-path: inset(0 50% 0 0); }
 .wipe-divider { position: absolute; z-index: 2; top: 0; bottom: 0; left: 50%; width: 36px; padding: 0; transform: translateX(-50%); border: 0; background: transparent; cursor: ew-resize; touch-action: none; }

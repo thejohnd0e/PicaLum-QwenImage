@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.29 — 2026-11-02
+
+- Make the Hold comparison button press-and-hold, so it reveals the original while pressed instead of only selecting the mode.
+- Show the hold instruction inside the comparison stage and let Space work while the Hold button has focus.
+
 ## 0.1.28 — 2026-11-02
 
 - Restore comparison controls for masked-edit results, comparing the composite against its source photo.

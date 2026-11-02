@@ -86,6 +86,35 @@ test("masked edit results expose comparison modes against the source, not the co
   assert.equal(get("viewerToolbar").hidden, true);
 });
 
+test("hold mode ships a visible instruction inside the stage", () => {
+  const html = fs.readFileSync(path.join(__dirname, "../index.html"), "utf8");
+  assert.match(html, /id="holdStage"[\s\S]*?id="holdHint"[\s\S]*?data-i18n="compareHoldHint"/);
+});
+
+test("holding the Hold button reveals the original until the pointer is released", () => {
+  const { state, get } = setup();
+  get("viewHold").dispatch("pointerdown", { button: 0, pointerId: 11 });
+  assert.equal(state.compareMode, "hold");
+  assert.equal(get("holdBefore").hidden, false);
+  assert.equal(get("holdAfter").hidden, true);
+  assert.equal(get("viewHold").hasPointerCapture(11), true);
+  get("viewHold").dispatch("pointerup", { pointerId: 11 });
+  assert.equal(get("holdBefore").hidden, true);
+  assert.equal(get("holdAfter").hidden, false);
+  assert.equal(get("viewHold").hasPointerCapture(11), false);
+});
+
+test("Space reveals the original while the Hold button keeps focus", () => {
+  const { get } = setup();
+  get("viewHold").dispatch("click");
+  const down = get("viewer").dispatch("keydown", { key: " ", target: get("viewHold") });
+  assert.equal(down.defaultPrevented, true);
+  assert.equal(get("holdBefore").hidden, false);
+  get("viewer").dispatch("keyup", { key: " " });
+  assert.equal(get("holdBefore").hidden, true);
+  assert.equal(get("holdAfter").hidden, false);
+});
+
 test("hold mode shows the original only during primary-pointer press and restores result on release or cancellation", () => {
   const { state, get } = setup();
   get("viewHold").dispatch("click");

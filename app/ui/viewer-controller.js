@@ -7,6 +7,7 @@
     let selectedItem = null;
     let drag = null;
     let holdingPointer = null;
+    let holdingElement = null;
     let holdingSpace = false;
 
     function renderHold() {
@@ -16,12 +17,29 @@
       $("holdLabel").textContent = translate(showingOriginal ? "before" : "after");
     }
 
+    function beginHold(pointerId, element) {
+      holdingPointer = pointerId;
+      holdingElement = element;
+      try {
+        element.setPointerCapture?.(pointerId);
+      } catch {
+        // Capture is a convenience; the window-level release still ends the hold.
+      }
+      renderHold();
+    }
+
     function releaseHold() {
       const pointerId = holdingPointer;
+      const element = holdingElement;
       holdingPointer = null;
+      holdingElement = null;
       holdingSpace = false;
-      if (pointerId !== null && $("holdStage").hasPointerCapture?.(pointerId)) {
-        $("holdStage").releasePointerCapture(pointerId);
+      if (pointerId !== null && element?.hasPointerCapture?.(pointerId)) {
+        try {
+          element.releasePointerCapture(pointerId);
+        } catch {
+          // The pointer may already be gone.
+        }
       }
       renderHold();
     }
@@ -185,18 +203,28 @@
     $("holdStage").addEventListener("pointerdown", (event) => {
       if (state.compareMode !== "hold" || event.button !== 0 || holdingPointer !== null) return;
       event.preventDefault();
-      holdingPointer = event.pointerId;
-      $("holdStage").setPointerCapture(event.pointerId);
-      renderHold();
+      beginHold(event.pointerId, $("holdStage"));
+    });
+    // The Hold button is also press-and-hold, so clicking it does something
+    // immediately instead of only selecting the mode.
+    $("viewHold").addEventListener("pointerdown", (event) => {
+      if ($("viewHold").disabled || event.button !== 0 || holdingPointer !== null) return;
+      if (state.compareMode !== "hold") setMode("hold");
+      beginHold(event.pointerId, $("viewHold"));
     });
     function endHoldPointer(event) {
       if (holdingPointer !== null && event.pointerId === holdingPointer) releaseHold();
     }
-    ["pointerup", "pointercancel", "lostpointercapture"].forEach((name) => $("holdStage").addEventListener(name, endHoldPointer));
+    ["holdStage", "viewHold"].forEach((id) => {
+      ["pointerup", "pointercancel", "lostpointercapture"].forEach((name) => $(id).addEventListener(name, endHoldPointer));
+    });
+    ["pointerup", "pointercancel"].forEach((name) => window.addEventListener(name, endHoldPointer));
     $("viewer").addEventListener("keydown", (event) => {
       const target = event.target;
       const isEditable = target?.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target?.tagName);
-      if (event.key !== " " || state.compareMode !== "hold" || target !== $("viewer") || isEditable || event.repeat) return;
+      const onHoldButton = target === $("viewHold");
+      if (event.key !== " " || state.compareMode !== "hold" || isEditable || event.repeat) return;
+      if (target !== $("viewer") && !onHoldButton) return;
       event.preventDefault();
       holdingSpace = true;
       renderHold();

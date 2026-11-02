@@ -148,13 +148,14 @@ textarea:focus-visible, input:focus-visible, select:focus-visible, .ref:focus-vi
 .cfg-controls input[type="range"] { width: 100%; accent-color: var(--primary); }
 .cfg-controls input[type="number"] { width: 76px; min-height: 30px; padding: 4px 6px; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--sunken); color: var(--text); font: 12px var(--font-mono); }
 
-/* CFG and Seed share one row; Seed keeps enough width for a 15-digit value. */
-.cfg-seed-row { display: grid; grid-template-columns: minmax(0, 1fr) 120px; gap: 10px; align-items: start; }
+/* CFG and Seed share one framed row; Seed keeps enough width for a 15-digit value. */
+.cfg-seed-card { display: grid; grid-template-columns: minmax(0, 1fr) 120px; gap: 10px; padding: 10px; border: 1px solid var(--border); border-radius: var(--r); background: var(--panel); }
 .cfg-col, .seed-col { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.cfg-seed-row .cfg-controls { grid-template-columns: minmax(0, 1fr) 58px; gap: 6px; }
-.cfg-seed-row .cfg-controls input[type="number"] { width: 58px; }
+.seed-col.divider { position: relative; }
+.seed-col.divider::before { content: ""; position: absolute; left: -6px; top: 0; bottom: 0; width: 1px; background: var(--border); }
+.cfg-seed-card .cfg-controls { grid-template-columns: minmax(0, 1fr) 58px; gap: 6px; }
+.cfg-seed-card .cfg-controls input[type="number"] { width: 58px; }
 .seed-col input[type="text"] { width: 100%; height: 30px; padding: 4px 8px; font: 11.5px var(--font-mono); }
-.cfg-seed-hint { grid-column: 1 / -1; margin-top: -2px; }
 .label .muted { text-transform: none; letter-spacing: 0; font-weight: 400; }
 .label-row { display: flex; align-items: center; justify-content: space-between; }
 .hint { font-size: 12px; color: var(--text-muted); }

@@ -71,7 +71,9 @@ test("quality UI is one collapsed card with segmented presets and bounded manual
   assert.match(html, /id="qualityWidth"[^>]*min="256"[^>]*max="4096"[^>]*step="32"/);
   assert.match(html, /id="qualityHeight"[^>]*min="256"[^>]*max="4096"[^>]*step="32"/);
   assert.match(html, /data-i18n="qualitySize"/);
-  assert.match(html, /class="cfg-seed-row"[\s\S]*id="seed"/);
+  assert.match(html, /class="cfg-seed-card"[\s\S]*id="seed"/);
+  assert.match(html, /class="seed-col divider"/);
+  assert.doesNotMatch(html, /data-i18n="cfgHint"/);
   for (const aspect of ["1:1", "4:3", "3:4", "3:2", "2:3", "16:9", "9:16"]) {
     assert.match(html, new RegExp(`data-ar="${aspect}"`));
   }

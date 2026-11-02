@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.27 — 2026-11-02
+
+- Group CFG Scale and Seed in one framed row with a divider, and remove the CFG hint to keep the panel calm.
+- Fix: after adding a reference photo the stage shows the canvas instead of leaving the previous result on screen; removing the last reference returns to the empty state.
+
 ## 0.1.26 — 2026-11-02
 
 - Redesign the quality block as one compact card: Draft / Standard / Max as a segmented control, a one-line summary when collapsed, and 30 px inline Steps and Size fields instead of full-width inputs. The open state is remembered.
